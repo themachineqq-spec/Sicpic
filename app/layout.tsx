@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
+import { headers } from "next/headers";
 import { Fraunces, Outfit } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import "./globals.css";
@@ -35,6 +37,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+export const instant = false;
+
 export const viewport: Viewport = {
   themeColor: "#f3efe7",
   width: "device-width",
@@ -42,7 +46,9 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  await connection();
+  await headers();
   return (
     <html lang="de" className={`${outfit.variable} ${fraunces.variable} h-full antialiased`}>
       <body className="min-h-full bg-background text-foreground">

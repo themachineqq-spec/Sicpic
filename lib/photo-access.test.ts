@@ -5,6 +5,8 @@ import {
   authorizePhotoDelete,
   authorizePhotoRead,
   authorizePhotoUpload,
+  authorizePhotoUploadFromBody,
+  authorizePhotoVariantRead,
 } from '@/lib/photo-access'
 import { readPresignExpiry } from '@/lib/presign'
 import type { ObjectSigner } from '@/lib/presign'
@@ -250,6 +252,62 @@ describe('feedback moderation', () => {
         status: 'in_arbeit',
       }),
     ).resolves.toMatchObject({ status: 'in_arbeit' })
+  })
+})
+
+describe('authentication before validation', () => {
+  it('rejects an anonymous upload before parsing the body', async () => {
+    const { signer, puts } = signerMock()
+    const readBody = vi.fn(async () => {
+      throw new Error('body should not be read')
+    })
+    const parseBody = vi.fn(() => {
+      throw new Error('body should not be parsed')
+    })
+    await expect(
+      authorizePhotoUploadFromBody({
+        getSession: async () => null,
+        getMember: async () => member,
+        signer,
+        photoId,
+        expiresIn: 300,
+        readBody,
+        parseBody,
+      }),
+    ).rejects.toMatchObject({ status: 401 })
+    expect(readBody).not.toHaveBeenCalled()
+    expect(parseBody).not.toHaveBeenCalled()
+    expect(puts).toEqual([])
+  })
+
+  it('rejects an unknown image variant only after the caller is authenticated', async () => {
+    const { signer, gets } = signerMock()
+    const getPhoto = vi.fn(async () => photo(member))
+    await expect(
+      authorizePhotoVariantRead({
+        getSession: async () => null,
+        getMember: async () => member,
+        getPhoto,
+        signer,
+        photoId,
+        variant: 'nope',
+        expiresIn: 300,
+      }),
+    ).rejects.toMatchObject({ status: 401 })
+    expect(getPhoto).not.toHaveBeenCalled()
+    expect(gets).toEqual([])
+
+    await expect(
+      authorizePhotoVariantRead({
+        getSession: async () => session,
+        getMember: async () => member,
+        getPhoto,
+        signer,
+        photoId,
+        variant: 'nope',
+        expiresIn: 300,
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'bad_request' })
   })
 })
 
