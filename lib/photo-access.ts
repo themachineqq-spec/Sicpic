@@ -79,7 +79,7 @@ export async function authorizePhotoDelete(
   if (!photo) throw new AppError(404, 'not_found', 'Foto nicht gefunden.')
   assertCanDeletePhoto(member, photo)
   await deps.deletePhoto(photo.id)
-  await deps.deleteObjects([photo.originalKey, photo.displayKey, photo.thumbKey])
+  await deps.deleteObjects([photo.originalKey, photo.displayKey, photo.thumbKey].filter((key): key is string => Boolean(key)))
   return { id: photo.id }
 }
 
@@ -162,6 +162,7 @@ export async function authorizePhotoVariantRead(
     photoId: string
     variant: string | null
     expiresIn?: number
+    download?: boolean
   },
 ) {
   const member = await requireRequestMember(deps)
@@ -173,6 +174,7 @@ export async function authorizePhotoVariantRead(
     variant,
     signer: deps.signer,
     expiresIn: deps.expiresIn,
+    download: deps.download,
   })
 }
 

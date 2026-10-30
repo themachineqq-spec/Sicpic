@@ -77,6 +77,8 @@ describe('postgres RLS migration', () => {
     await client.query('grant anon, authenticated, service_role to current_user')
     const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261028120000_init.sql'), 'utf8')
     await client.query(sql)
+    const videoSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261030140000_video_media.sql'), 'utf8')
+    await client.query(videoSql)
     await client.query('grant usage on schema public to anon, authenticated, service_role')
     await client.query(`insert into auth.users (id) values ($1), ($2)`, [userA, userB])
     await client.query(
@@ -132,6 +134,33 @@ describe('postgres RLS migration', () => {
     })
     expect(ordered.ids).toEqual([photoB, photoA])
     expect(ordered.removed).toEqual([photoA])
+  })
+
+  it('lists a video with the photos and lets only the owner delete it', async () => {
+    const videoId = '12121212-1212-4121-8121-121212121212'
+    const client = await admin()
+    try {
+      await client.query('begin')
+      await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [userA])
+      await client.query(`select set_config('request.jwt.claim.role', 'authenticated', true)`)
+      await client.query('set local role authenticated')
+      await client.query(
+        `insert into public.photos (id, owner_id, original_key, display_key, thumb_key, filename, content_type, byte_size, width, height, captured_at, media_type, duration_ms, codec)
+         values ($1,$2,$3,null,null,'clip.mov','video/quicktime',20,1920,1080,'2024-08-01T00:00:00Z','video',4000,'hevc')`,
+        [videoId, adminA, `members/${adminA}/photos/${videoId}/original.mov`],
+      )
+      const onlyVideo = await client.query(`select id, duration_ms from public.list_photos('group', null, null, 10, 'video')`)
+      const onlyPhoto = await client.query(`select id from public.list_photos('mine', null, null, 10, 'photo')`)
+      await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [userB])
+      const removed = await client.query('delete from public.photos where id = $1', [videoId])
+      await client.query('rollback')
+      expect(onlyVideo.rows.map((row) => row.id)).toEqual([videoId])
+      expect(Number(onlyVideo.rows[0]?.duration_ms)).toBe(4000)
+      expect(onlyPhoto.rows.map((row) => row.id)).toEqual([photoA])
+      expect(removed.rowCount).toBe(0)
+    } finally {
+      await client.end()
+    }
   })
 
   it('keeps private folders, feedback and member edits inside their policies', async () => {

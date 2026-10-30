@@ -2,6 +2,7 @@ import { resolveOriginalType, resolveScreenshotType } from '@/lib/content-types'
 import { AppError } from '@/lib/errors'
 import {
   assertSafeObjectKey,
+  contentDispositionAttachment,
   feedbackScreenshotKey,
   keyForVariant,
   photoObjectKeys,
@@ -15,7 +16,7 @@ export const MAX_PRESIGN_EXPIRES_SECONDS = 600
 
 export type ObjectSigner = {
   signPut(input: { key: string; contentType: string; expiresIn: number }): Promise<string>
-  signGet(input: { key: string; expiresIn: number }): Promise<string>
+  signGet(input: { key: string; expiresIn: number; responseContentDisposition?: string }): Promise<string>
 }
 
 export type SignedTarget = {
@@ -78,10 +79,11 @@ export async function issuePhotoUploadUrls(input: {
 
 export async function issuePhotoReadUrl(input: {
   member: Member | null
-  photo: { originalKey: string; displayKey: string; thumbKey: string } | null
+  photo: { originalKey: string; displayKey: string | null; thumbKey: string | null; filename?: string } | null
   variant: PhotoVariant
   signer: ObjectSigner
   expiresIn?: number
+  download?: boolean
 }): Promise<{ url: string; expiresIn: number; key: string }> {
   assertMember(input.member)
   if (!input.photo) {
@@ -89,7 +91,9 @@ export async function issuePhotoReadUrl(input: {
   }
   const expiresIn = input.expiresIn ?? DEFAULT_PRESIGN_EXPIRES_SECONDS
   const key = keyForVariant(input.photo, input.variant)
-  const url = await input.signer.signGet({ key, expiresIn })
+  const responseContentDisposition =
+    input.download && input.photo.filename ? contentDispositionAttachment(input.photo.filename) : undefined
+  const url = await input.signer.signGet({ key, expiresIn, responseContentDisposition })
   return { url, expiresIn, key }
 }
 

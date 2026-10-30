@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AppError } from '@/lib/errors'
+import { issuePhotoReadUrl } from '@/lib/presign'
 import {
   authorizeFeedbackModeration,
   authorizeFeedbackScreenshot,
@@ -59,6 +60,9 @@ function photo(owner: Member): PhotoRecord {
     thumbKey: `members/${owner.id}/photos/${photoId}/thumb.jpg`,
     filename: 'IMG.HEIC',
     contentType: 'image/heic',
+    mediaType: 'photo',
+    durationMs: null,
+    codec: null,
     byteSize: 10,
     width: 100,
     height: 80,
@@ -323,6 +327,31 @@ describe('presign expiry configuration', () => {
     expect(() => readPresignExpiry('3.5')).toThrow(AppError)
     expect(readPresignExpiry('')).toBe(300)
     expect(readPresignExpiry('60')).toBe(60)
+  })
+})
+
+describe('video download urls', () => {
+  it('asks R2 for an attachment name on the original', async () => {
+    const { signer, gets } = signerMock()
+    const record = photo(member)
+    await issuePhotoReadUrl({
+      member,
+      photo: { ...record, displayKey: null, thumbKey: null, filename: 'clip.mp4' },
+      variant: 'original',
+      signer,
+      download: true,
+      expiresIn: 120,
+    })
+    expect(gets[0]).toMatchObject({ responseContentDisposition: expect.stringContaining('attachment') })
+    await expect(
+      issuePhotoReadUrl({
+        member,
+        photo: { ...record, displayKey: null, thumbKey: null },
+        variant: 'thumb',
+        signer,
+        expiresIn: 120,
+      }),
+    ).rejects.toMatchObject({ status: 404 })
   })
 })
 

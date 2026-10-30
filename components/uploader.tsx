@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { api } from "@/lib/api-client";
 import { putWithProgress } from "@/lib/browser-upload";
+import { isVideoFile } from "@/lib/content-types";
 import { preparePhotoFile } from "@/lib/images/prepare-photo";
+import { uploadPreparedVideo } from "@/lib/video/client-upload";
 
 type Item = {
   name: string;
@@ -30,6 +32,12 @@ export function Uploader({ onUploaded }: { onUploaded: () => void }) {
 
   async function uploadOne(file: File, index: number) {
     patch(index, { status: "running", progress: 0.02, message: "Wird vorbereitet…" });
+    if (isVideoFile(file)) {
+      await uploadPreparedVideo(file, {
+        onProgress: (ratio, message) => patch(index, { progress: ratio, message, status: ratio >= 1 ? "done" : "running" }),
+      });
+      return;
+    }
     const prepared = await preparePhotoFile(file);
     patch(index, { progress: 0.08, message: "Wird hochgeladen…" });
     const grant = await api<UploadGrant>("/api/photos/uploads", {
@@ -92,7 +100,7 @@ export function Uploader({ onUploaded }: { onUploaded: () => void }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="font-semibold">Fotos hinzufügen</p>
-          <p className="text-sm text-muted">JPEG, PNG oder HEIC, auch mehrere auf einmal.</p>
+          <p className="text-sm text-muted">JPEG, PNG, HEIC oder Video (MOV, MP4, 3GP, WebM).</p>
         </div>
         <button
           type="button"
@@ -106,7 +114,7 @@ export function Uploader({ onUploaded }: { onUploaded: () => void }) {
       <input
         ref={input}
         type="file"
-        accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png"
+        accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,video/mp4,video/quicktime,video/webm,video/3gpp,.mp4,.mov,.m4v,.webm,.3gp"
         multiple
         className="sr-only"
         onChange={(event) => void onFiles([...(event.target.files ?? [])])}

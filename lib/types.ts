@@ -26,6 +26,9 @@ export type FeedbackItem = {
 export type PhotoVariant = 'original' | 'display' | 'thumb'
 export type PhotoScope = 'group' | 'mine'
 
+export type MediaType = 'photo' | 'video'
+export type MediaFilter = 'all' | MediaType
+
 export type GalleryPhoto = {
   id: string
   ownerId: string
@@ -38,14 +41,17 @@ export type GalleryPhoto = {
   createdAt: string
   uploaderName: string
   thumbUrl: string
+  mediaType?: MediaType
+  durationMs?: number | null
+  codec?: string | null
 }
 
 export type PhotoRecord = {
   id: string
   ownerId: string
   originalKey: string
-  displayKey: string
-  thumbKey: string
+  displayKey: string | null
+  thumbKey: string | null
   filename: string
   contentType: string
   byteSize: number
@@ -54,6 +60,9 @@ export type PhotoRecord = {
   capturedAt: string
   createdAt: string
   uploaderName: string
+  mediaType: MediaType
+  durationMs: number | null
+  codec: string | null
 }
 
 export type SessionIdentity = {

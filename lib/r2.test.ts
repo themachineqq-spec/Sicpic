@@ -1,4 +1,4 @@
-import { DeleteObjectsCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMultipartUploadCommand, DeleteObjectsCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { mockClient } from 'aws-sdk-client-mock'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -75,5 +75,22 @@ describe('R2 signer', () => {
     s3Mock.on(DeleteObjectsCommand).resolves({})
     await deleteR2Objects([])
     expect(s3Mock.commandCalls(DeleteObjectsCommand)).toHaveLength(0)
+  })
+
+  it('starts, signs, completes and aborts a multipart upload', async () => {
+    s3Mock.on(CreateMultipartUploadCommand).resolves({ UploadId: 'upload-12345678' })
+    s3Mock.on(CompleteMultipartUploadCommand).resolves({})
+    s3Mock.on(AbortMultipartUploadCommand).resolves({})
+    const { createMultipartUpload, signUploadPart, completeMultipartUpload, abortMultipartUpload } = await import('@/lib/r2')
+    const key = 'members/11111111-1111-4111-8111-111111111111/photos/44444444-4444-4444-8444-444444444444/original.mp4'
+    await expect(createMultipartUpload(key, 'video/mp4')).resolves.toBe('upload-12345678')
+    const url = await signUploadPart({ key, uploadId: 'upload-12345678', partNumber: 2, expiresIn: 300 })
+    expect(url).toContain('original.mp4')
+    await completeMultipartUpload({ key, uploadId: 'upload-12345678', parts: [{ partNumber: 1, etag: '"abc"' }] })
+    await abortMultipartUpload(key, 'upload-12345678')
+    expect(s3Mock.commandCalls(CompleteMultipartUploadCommand)).toHaveLength(1)
+    expect(s3Mock.commandCalls(AbortMultipartUploadCommand)).toHaveLength(1)
+    s3Mock.on(CreateMultipartUploadCommand).resolves({})
+    await expect(createMultipartUpload(key, 'video/mp4')).rejects.toMatchObject({ status: 500 })
   })
 })

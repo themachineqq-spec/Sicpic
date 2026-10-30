@@ -1,22 +1,22 @@
 import 'server-only'
 
-import { resolveOriginalType } from '@/lib/content-types'
+import { resolveOriginalType, resolveVideoType } from '@/lib/content-types'
 import { isReasonableCaptureDate } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
-import { LIMITS, photoObjectKeys, sanitizeFilename } from '@/lib/keys'
+import { LIMITS, photoObjectKeys, sanitizeFilename, videoObjectKeys } from '@/lib/keys'
 import { readPresignExpiry } from '@/lib/presign'
 import { completeE2EPhoto, listE2EPhotos } from '@/lib/e2e-store'
 import { isE2ERequest } from '@/lib/e2e-guard'
 import { createR2Signer, headR2Object } from '@/lib/r2'
 import { createClient } from '@/lib/supabase/server'
-import type { Member, PhotoRecord, PhotoScope } from '@/lib/types'
+import type { MediaFilter, Member, PhotoRecord, PhotoScope } from '@/lib/types'
 
 type PhotoRow = {
   id: string
   owner_id: string
   original_key: string
-  display_key: string
-  thumb_key: string
+  display_key: string | null
+  thumb_key: string | null
   filename: string
   content_type: string
   byte_size: number
@@ -24,6 +24,9 @@ type PhotoRow = {
   height: number | null
   captured_at: string
   created_at: string
+  media_type?: string | null
+  duration_ms?: number | null
+  codec?: string | null
   uploader_name?: string | null
   members?: { display_name: string | null; email: string } | { display_name: string | null; email: string }[] | null
 }
@@ -51,10 +54,13 @@ export function mapPhoto(row: PhotoRow): PhotoRecord {
     capturedAt: new Date(row.captured_at).toISOString(),
     createdAt: new Date(row.created_at).toISOString(),
     uploaderName: uploaderName(row),
+    mediaType: row.media_type === 'video' ? 'video' : 'photo',
+    durationMs: row.duration_ms == null ? null : Number(row.duration_ms),
+    codec: row.codec ?? null,
   }
 }
 
-const photoColumns = 'id, owner_id, original_key, display_key, thumb_key, filename, content_type, byte_size, width, height, captured_at, created_at, members(display_name, email)'
+const photoColumns = 'id, owner_id, original_key, display_key, thumb_key, filename, content_type, byte_size, width, height, captured_at, created_at, media_type, duration_ms, codec, members(display_name, email)'
 
 export async function getPhotoRecord(id: string): Promise<PhotoRecord | null> {
   const supabase = await createClient()
@@ -77,8 +83,12 @@ export async function deletePhotoRecord(id: string): Promise<void> {
   if (error) throw new AppError(500, 'server', 'Foto konnte nicht gelöscht werden.')
 }
 
-export async function listPhotoPage(scope: PhotoScope, cursor: { at: string; id: string } | null) {
-  if (await isE2ERequest()) return listE2EPhotos(scope, cursor)
+export async function listPhotoPage(
+  scope: PhotoScope,
+  cursor: { at: string; id: string } | null,
+  media: MediaFilter = 'all',
+) {
+  if (await isE2ERequest()) return listE2EPhotos(scope, cursor, media)
   const supabase = await createClient()
   const limit = LIMITS.pageSize
   const { data, error } = await supabase.rpc('list_photos', {
@@ -86,16 +96,18 @@ export async function listPhotoPage(scope: PhotoScope, cursor: { at: string; id:
     p_cursor_at: cursor?.at ?? null,
     p_cursor_id: cursor?.id ?? null,
     p_limit: limit + 1,
+    p_media: media,
   })
   if (error) throw new AppError(500, 'server', 'Die Fotoliste konnte nicht geladen werden.')
   const rows = ((data ?? []) as PhotoRow[]).map(mapPhoto)
   const hasMore = rows.length > limit
   const page = hasMore ? rows.slice(0, limit) : rows
   const expiresIn = readPresignExpiry(process.env.PRESIGN_EXPIRES_SECONDS)
-  const signer = page.length ? createR2Signer() : null
+  const signer = page.some((photo) => photo.thumbKey) ? createR2Signer() : null
   const photos = await Promise.all(
     page.map(async (photo) => {
-      const signed = await signer!.signGet({ key: photo.thumbKey, expiresIn })
+      if (!photo.thumbKey || !signer) return { ...publicPhoto(photo), thumbUrl: '' }
+      const signed = await signer.signGet({ key: photo.thumbKey, expiresIn })
       return { ...publicPhoto(photo), thumbUrl: signed }
     }),
   )
@@ -121,6 +133,9 @@ export function publicPhoto(photo: PhotoRecord) {
     capturedAt: photo.capturedAt,
     createdAt: photo.createdAt,
     uploaderName: photo.uploaderName,
+    mediaType: photo.mediaType,
+    durationMs: photo.durationMs,
+    codec: photo.codec,
   }
 }
 
@@ -172,6 +187,61 @@ export async function completePhotoUpload(input: {
   if (error) {
     if (error.code === '23505') throw new AppError(409, 'conflict', 'Dieses Foto ist schon gespeichert.')
     throw new AppError(500, 'server', 'Die Fotodaten konnten nicht gespeichert werden.')
+  }
+  return { id: keys.photoId }
+}
+
+export async function completeVideoUpload(input: {
+  member: Member
+  photoId: string
+  filename: string
+  contentType: string
+  width: number | null
+  height: number | null
+  capturedAt: string
+  durationMs: number
+  codec: string | null
+  byteSize: number
+  hasThumb: boolean
+}) {
+  const captured = new Date(input.capturedAt)
+  if (!isReasonableCaptureDate(captured)) {
+    throw new AppError(400, 'bad_request', 'Das Aufnahmedatum ist ungültig.')
+  }
+  const video = resolveVideoType(input.contentType, input.filename)
+  const keys = videoObjectKeys(input.member.id, input.photoId, video.extension)
+  const originalHead = await headR2Object(keys.original)
+  if (originalHead.byteSize < 1 || originalHead.byteSize > LIMITS.videoBytes || originalHead.byteSize !== input.byteSize) {
+    throw new AppError(400, 'bad_request', 'Die Videodatei ist unvollständig.')
+  }
+  let thumbKey: string | null = null
+  if (input.hasThumb) {
+    const thumbHead = await headR2Object(keys.thumb)
+    if (thumbHead.byteSize < 1 || thumbHead.byteSize > LIMITS.thumbBytes) {
+      throw new AppError(400, 'bad_request', 'Die Vorschau ist zu groß oder leer.')
+    }
+    thumbKey = keys.thumb
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.from('photos').insert({
+    id: keys.photoId,
+    owner_id: input.member.id,
+    original_key: keys.original,
+    display_key: null,
+    thumb_key: thumbKey,
+    filename: sanitizeFilename(input.filename),
+    content_type: video.contentType,
+    byte_size: originalHead.byteSize,
+    width: input.width,
+    height: input.height,
+    captured_at: captured.toISOString(),
+    media_type: 'video',
+    duration_ms: input.durationMs,
+    codec: input.codec,
+  })
+  if (error) {
+    if (error.code === '23505') throw new AppError(409, 'conflict', 'Dieses Video ist schon gespeichert.')
+    throw new AppError(500, 'server', 'Die Videodaten konnten nicht gespeichert werden.')
   }
   return { id: keys.photoId }
 }

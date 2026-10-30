@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { putWithProgress } from '@/lib/browser-upload'
+import { putPart, putWithProgress } from '@/lib/browser-upload'
 
 describe('putWithProgress', () => {
   it('reports upload progress and resolves on success', async () => {
@@ -52,5 +52,30 @@ describe('putWithProgress', () => {
     }
     vi.stubGlobal('XMLHttpRequest', FakeXHR)
     await expect(putWithProgress('https://signed.example/file', new Blob(['a']), 'image/jpeg', () => undefined)).rejects.toThrow(/CORS/)
+  })
+
+  it('returns the part etag and complains when CORS hides it', async () => {
+    class FakeXHR {
+      upload = { onprogress: (_event: ProgressEvent) => undefined }
+      status = 200
+      onload: () => void = () => undefined
+      onerror: () => void = () => undefined
+      open = vi.fn()
+      getResponseHeader(name: string) {
+        return name.toLowerCase() === 'etag' ? '"abc"' : null
+      }
+      send() {
+        this.onload()
+      }
+    }
+    vi.stubGlobal('XMLHttpRequest', FakeXHR)
+    await expect(putPart('https://signed.example/part', new Blob(['abcd']), () => undefined)).resolves.toBe('"abc"')
+    class HiddenEtag extends FakeXHR {
+      override getResponseHeader() {
+        return null
+      }
+    }
+    vi.stubGlobal('XMLHttpRequest', HiddenEtag)
+    await expect(putPart('https://signed.example/part', new Blob(['abcd']), () => undefined)).rejects.toThrow(/ETag/)
   })
 })

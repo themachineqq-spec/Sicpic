@@ -21,7 +21,7 @@ async function GroupLoader() {
     <PhotoGallery
       scope="group"
       title="Gruppe"
-      intro="Alle Fotos, neueste Aufnahme zuerst. Ohne EXIF zählt der Upload."
+      intro="Fotos und Videos, neueste Aufnahme zuerst. Ohne Datum in der Datei zählt der Upload."
       initial={page.photos}
       initialCursor={page.nextCursor}
       canDelete={false}

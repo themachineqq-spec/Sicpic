@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatPhotoTime } from "@/lib/dates";
 import type { GalleryPhoto } from "@/lib/types";
 
@@ -11,6 +11,8 @@ export function Lightbox({
   error,
   onClose,
   onIndex,
+  onRenew,
+  onDownload,
 }: {
   photos: GalleryPhoto[];
   index: number;
@@ -18,6 +20,8 @@ export function Lightbox({
   error: string | null;
   onClose: () => void;
   onIndex: (index: number) => void;
+  onRenew?: () => Promise<string | null>;
+  onDownload?: () => Promise<string | null>;
 }) {
   const photo = photos[index];
 
@@ -45,7 +49,9 @@ export function Lightbox({
         </button>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center px-3">
-        {src ? (
+        {photo.mediaType === "video" ? (
+          <VideoFrame key={`${photo.id}-${src ?? ""}`} src={src} error={error} onRenew={onRenew} onDownload={onDownload} />
+        ) : src ? (
           // Presigned URLs expire and must not pass through the image optimizer.
           // eslint-disable-next-line @next/next/no-img-element
           <img src={src} alt={photo.filename} className="max-h-full max-w-full object-contain" />
@@ -70,5 +76,67 @@ export function Lightbox({
         </button>
       </div>
     </div>
+  );
+}
+
+function VideoFrame({
+  src,
+  error,
+  onRenew,
+  onDownload,
+}: {
+  src: string | null;
+  error: string | null;
+  onRenew?: () => Promise<string | null>;
+  onDownload?: () => Promise<string | null>;
+}) {
+  const renewed = useRef(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [blocked, setBlocked] = useState(false);
+  const [downloadHref, setDownloadHref] = useState<string | null>(null);
+
+  async function fail(unsupported: boolean) {
+    if (!unsupported && !renewed.current && onRenew) {
+      renewed.current = true;
+      const next = await onRenew().catch(() => null);
+      if (next) return;
+    }
+    setBlocked(true);
+    if (onDownload && !downloadHref) {
+      const href = await onDownload().catch(() => null);
+      if (href) setDownloadHref(href);
+    }
+  }
+
+  if (!src && !blocked) return <p className="text-sm text-stone-300">{error ?? "Video wird geladen…"}</p>;
+  if (blocked) {
+    return (
+      <div className="max-w-sm px-4 text-center">
+        <p className="text-sm text-stone-100">Dieser Browser kann das Video nicht abspielen. Du kannst es herunterladen und lokal öffnen.</p>
+        {downloadHref ? (
+          <a href={downloadHref} className="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-stone-950">
+            Herunterladen
+          </a>
+        ) : (
+          <p className="mt-3 text-xs text-stone-400">Download wird vorbereitet…</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <video
+      ref={videoRef}
+      key={src}
+      src={src ?? undefined}
+      controls
+      playsInline
+      preload="metadata"
+      className="max-h-full max-w-full"
+      onError={() => {
+        const unsupported = videoRef.current?.error?.code === 4;
+        void fail(unsupported);
+      }}
+    />
   );
 }
