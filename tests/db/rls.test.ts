@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { photoObjectKeys, photoThumbKeys, videoObjectKeys } from '@/lib/keys'
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://sicpic:sicpic@127.0.0.1:5432/sicpic_test'
 const adminA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -161,6 +162,48 @@ describe('postgres RLS migration', () => {
     } finally {
       await client.end()
     }
+  })
+
+  it('saves a video with the small and large webp previews the app writes', async () => {
+    // Regression: the perf migration compared thumb-640 with substring(...), which
+    // returns only the capture group ("webp"), so every video with a preview failed
+    // photos_keys_owned and the app showed "Die Videodaten konnten nicht gespeichert werden."
+    const videoId = '13131313-1313-4131-8131-131313131313'
+    const keys = videoObjectKeys(adminA, videoId, 'mov')
+    const error = await withRole(userA, 'authenticated', (client) =>
+      captureError(
+        client,
+        `insert into public.photos (id, owner_id, original_key, display_key, thumb_key, thumb_large_key, filename, content_type, byte_size, width, height, captured_at, media_type, duration_ms, codec)
+         values ($1,$2,$3,null,$4,$5,'IMG_0001.MOV','video/quicktime',20,1920,1080,'2026-10-30T21:00:00Z','video',4000,'hevc')`,
+        [videoId, adminA, keys.original, keys.thumb, keys.thumbLarge],
+      ),
+    )
+    expect(error).toBe('')
+  })
+
+  it('saves a photo with sized previews and lets attach_thumb_set upgrade an old photo', async () => {
+    const photoId = '14141414-1414-4141-8141-141414141414'
+    const base = photoObjectKeys(adminA, photoId, 'jpg')
+    const sized = photoThumbKeys(adminA, photoId, 'webp')
+    const old = photoThumbKeys(adminA, photoA, 'webp')
+    const result = await withRole(userA, 'authenticated', async (client) => {
+      const insert = await captureError(
+        client,
+        `insert into public.photos (id, owner_id, original_key, display_key, thumb_key, thumb_large_key, filename, content_type, byte_size, width, height, captured_at)
+         values ($1,$2,$3,$4,$5,$6,'c.jpg','image/jpeg',10,1,1,'2025-01-01T00:00:00Z')`,
+        [photoId, adminA, base.original, base.display, sized.thumb, sized.thumbLarge],
+      )
+      const upgrade = await captureError(client, `select public.attach_thumb_set($1, $2, $3, null)`, [photoA, old.thumb, old.thumbLarge])
+      const wrongLarge = await captureError(
+        client,
+        `select public.attach_thumb_set($1, $2, $3, null)`,
+        [photoA, old.thumb, old.thumbLarge.replace('thumb-640.webp', 'thumb-640webp')],
+      )
+      return { insert, upgrade, wrongLarge }
+    })
+    expect(result.insert).toBe('')
+    expect(result.upgrade).toBe('')
+    expect(result.wrongLarge).toMatch(/photos_keys_owned/)
   })
 
   it('keeps private folders, feedback and member edits inside their policies', async () => {

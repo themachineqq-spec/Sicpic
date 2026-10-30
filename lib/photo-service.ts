@@ -232,6 +232,7 @@ export async function completePhotoUpload(input: {
   })
   if (error) {
     if (error.code === '23505') throw new AppError(409, 'conflict', 'Dieses Foto ist schon gespeichert.')
+    console.error('photo insert failed', { code: error.code, message: error.message })
     throw new AppError(500, 'server', 'Die Fotodaten konnten nicht gespeichert werden.')
   }
   return { id: keys.photoId }
@@ -292,6 +293,7 @@ export async function completeVideoUpload(input: {
   })
   if (error) {
     if (error.code === '23505') throw new AppError(409, 'conflict', 'Dieses Video ist schon gespeichert.')
+    console.error('video insert failed', { code: error.code, message: error.message })
     throw new AppError(500, 'server', 'Die Videodaten konnten nicht gespeichert werden.')
   }
   return { id: keys.photoId }
