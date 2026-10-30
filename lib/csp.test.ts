@@ -16,6 +16,7 @@ describe('buildContentSecurityPolicy', () => {
     expect(policy).toContain("object-src 'none'")
     expect(policy).toContain("base-uri 'self'")
     expect(policy).toContain("worker-src 'self' blob:")
+    expect(policy).toContain("media-src 'self' blob: https://*.r2.cloudflarestorage.com")
     expect(policy).toContain('https://*.r2.cloudflarestorage.com')
     expect(policy).toContain('https://uvmycgkhpbpeegdrasqv.supabase.co')
     expect(policy).toContain('wss://uvmycgkhpbpeegdrasqv.supabase.co')

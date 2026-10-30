@@ -1,4 +1,4 @@
-import { saveE2EBlob } from '@/lib/e2e-store'
+import { saveE2EBytes } from '@/lib/e2e-store'
 import { isE2ERequest } from '@/lib/e2e-guard'
 import { errorResponse, json } from '@/lib/http'
 
@@ -8,9 +8,13 @@ export async function PUT(request: Request) {
     const url = new URL(request.url)
     const photoId = url.searchParams.get('photoId') ?? ''
     const slot = url.searchParams.get('slot') ?? ''
-    const body = await request.arrayBuffer()
-    saveE2EBlob(photoId, slot, body.byteLength)
-    return json({ ok: true })
+    const part = url.searchParams.get('n')
+    const slotName = slot === 'part' ? `part:${part ?? ''}` : slot
+    const body = new Uint8Array(await request.arrayBuffer())
+    const etag = saveE2EBytes(photoId, slotName, body)
+    const response = json({ ok: true })
+    response.headers.set('ETag', etag)
+    return response
   } catch (error) {
     return errorResponse(error)
   }

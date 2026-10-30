@@ -8,7 +8,7 @@ Die Oberfläche ist Deutsch. Auf dem Handy lässt sich Sicpic als App auf den Ho
 
 - **Mein Ordner:** eigene Fotos hochladen, ansehen und löschen. Mehrere Dateien auf einmal, mit Fortschritt.
 - **Gruppe:** alle Fotos aller Mitglieder, sortiert nach Aufnahmedatum. Pro Tag und Monat gruppiert. Antippen öffnet die große Ansicht und zeigt, wer hochgeladen hat.
-- **Formate:** JPEG, PNG, HEIC/HEIF. Das Original bleibt erhalten. Der Browser erzeugt beim Upload eine JPEG-Anzeigeversion und eine kleine Vorschau, damit HEIC überall sichtbar ist. Dafür ist keine Bildverarbeitung auf dem Server nötig.
+- **Formate:** JPEG, PNG, HEIC/HEIF und Video (MOV, MP4, 3GP, WebM). Fotos bleiben im Original. Der Browser erzeugt beim Foto-Upload eine JPEG-Anzeigeversion und eine kleine Vorschau. Videos werden nicht auf dem Server umgewandelt. Eine Vorschau entsteht im Browser aus einem Bild des Videos, wenn der Browser den Codec abspielen kann.
 - **Datum:** `DateTimeOriginal` aus den EXIF-Daten. Fehlt es, gilt das Uploaddatum. Fehlt die Zeitzone im EXIF, wird Europe/Berlin angenommen.
 - **Große Sammlungen:** die Chronik lädt seitenweise und zeigt nur Vorschaubilder. Originale werden nie alle auf einmal geladen.
 - **Rückmeldung:** Fehler oder Wunsch, optional mit Screenshot. Admins filtern nach Art und Status und setzen den Status auf neu, in Arbeit oder erledigt.
@@ -92,7 +92,7 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon` `public` Key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` Key → `SUPABASE_SERVICE_ROLE_KEY` (nur Server, nie im Client)
-3. Unter **SQL Editor** den Inhalt von `supabase/migrations/20261028120000_init.sql` ausführen. Die Datei legt Tabellen, RLS-Policies und Hilfsfunktionen an.
+3. Unter **SQL Editor** zuerst `supabase/migrations/20261028120000_init.sql` ausführen, danach `supabase/migrations/20261030140000_video_media.sql`. Die erste Datei legt Tabellen, RLS-Policies und Hilfsfunktionen an. Die zweite ergänzt Videos in derselben Tabelle.
 4. Unter **Authentication → Providers** E-Mail/Passwort und alle anderen Provider auslassen. Nur **Google** aktivieren.
 5. Unter **Authentication → URL Configuration**:
    - Site URL: `https://<site>.netlify.app`
@@ -136,7 +136,20 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
 ]
 ```
 
-`<img>`-Vorschauen brauchen dafür kein CORS. Der PUT aus dem Browser schon.
+`<img>`-Vorschauen brauchen dafür kein CORS. Der PUT aus dem Browser schon. Mehrteilige Video-Uploads lesen die Antwortkopfzeile `ETag`. Die steht oben schon in `ExposeHeaders`. Ohne sie bricht der Upload nach dem ersten Teil ab. Methoden bleiben GET, PUT und HEAD. Ein Teil ist ein PUT, genau wie ein Foto.
+
+Videos dürfen bis zu 4 GB groß sein. Die App schickt sie in Teilen von 16 MB, mehrere Teile parallel, und bricht einen fehlgeschlagenen Upload wieder ab. Es gibt keine bezahlte Transcodierung. Was das Handy nicht abspielen kann, lässt sich herunterladen.
+
+| Datei | Codec | iPhone Safari | Android Chrome | Desktop Chrome |
+| --- | --- | --- | --- | --- |
+| MOV | H.264 | ja | meistens | meistens |
+| MOV | HEVC, auch 4K, HDR, Zeitlupe | ja | nein | nein |
+| MP4 | H.264 | ja | ja | ja |
+| MP4 | H.265/HEVC | ja | nur auf manchen Geräten | nein |
+| 3GP | H.264 | unsicher | oft | unsicher |
+| WebM | VP8/VP9 | nein | ja | ja |
+
+Zeitlupe bleibt die gespeicherte Datei. Sicpic baut die iPhone-Zeitlupen-Schnittliste nicht nach. HDR und 4K werden nicht heruntergerechnet.
 
 ### 4. Netlify
 
@@ -152,7 +165,7 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
 2. Unter **Verwaltung → Mitglieder** weitere Google-Adressen eintragen. Die Adresse muss exakt die des Google-Kontos sein.
 3. Diese Personen melden sich an. Wer nicht auf der Liste steht, sieht „Nicht eingeladen“.
 
-Fotos löschen kann nur, wer sie hochgeladen hat, und nur im eigenen Ordner. Ein Admin kann ein Mitglied entfernen; dabei werden dessen Fotos im Bucket mitgelöscht. Die letzte Admin-Person bleibt geschützt.
+Fotos und Videos löschen kann nur, wer sie hochgeladen hat, und nur im eigenen Ordner. Ein Admin kann ein Mitglied entfernen; dabei werden dessen Dateien im Bucket mitgelöscht. Die letzte Admin-Person bleibt geschützt.
 
 ### 6. Auf den Home-Bildschirm
 

@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs'
 import http from 'node:http'
 import { join } from 'node:path'
 import { chromium } from 'playwright-core'
@@ -91,7 +92,24 @@ if ((await folder.locator('h1').innerText()) !== 'Mein Ordner') {
 const file = join(process.cwd(), 'tests/e2e/strand.jpg')
 await folder.locator('input[type="file"]').setInputFiles(file)
 await folder.getByText('Gespeichert').waitFor({ timeout: 20000 })
-await folder.getByRole('img', { name: /strand|sicpic-e2e\.jpg/ }).waitFor({ timeout: 20000 })
+await folder.getByRole('img', { name: /strand|sicpic-e2e\.jpg/ }).first().waitFor({ timeout: 20000 })
+for (const name of ['sample.mp4', 'sample.mov']) {
+  await folder.locator('input[type="file"]').setInputFiles(join(process.cwd(), 'tests/fixtures', name))
+  await folder.getByRole('img', { name: `Video ${name}` }).waitFor({ timeout: 20000 })
+}
+await folder.getByRole('button', { name: 'Videos', exact: true }).click()
+await folder.getByRole('img', { name: 'Video sample.mp4' }).waitFor()
+const shots = process.env.SICPIC_SHOTS
+if (shots) {
+  mkdirSync(shots, { recursive: true })
+  await folder.setViewportSize({ width: 390, height: 844 })
+  await folder.screenshot({ path: join(shots, 'sicpic-video-mobile.png') })
+  await folder.setViewportSize({ width: 1280, height: 800 })
+  await folder.screenshot({ path: join(shots, 'sicpic-video-desktop.png') })
+}
+await folder.getByRole('img', { name: 'Video sample.mp4' }).click()
+await folder.locator('video').waitFor({ timeout: 10000 })
+if (shots) await folder.screenshot({ path: join(shots, 'sicpic-video-player.png') })
 const folderViolations = await folder.evaluate(() => window.__violations)
 if (folderViolations.length > 0) {
   console.error('csp violations during upload', folderViolations)

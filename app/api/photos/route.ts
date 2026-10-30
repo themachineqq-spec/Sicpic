@@ -4,7 +4,7 @@ import { AppError } from '@/lib/errors'
 import { errorResponse, json, readJson } from '@/lib/http'
 import { completePhotoUpload, listPhotoPage } from '@/lib/photo-service'
 import { parseInput, completePhotoSchema } from '@/lib/validators'
-import type { PhotoScope } from '@/lib/types'
+import type { MediaFilter, PhotoScope } from '@/lib/types'
 
 export async function GET(request: Request) {
   try {
@@ -20,7 +20,11 @@ export async function GET(request: Request) {
     if (url.searchParams.get('cursor') && !cursor) {
       throw new AppError(400, 'bad_request', 'Der Seitenzeiger ist ungültig.')
     }
-    return json(await listPhotoPage(scope, cursor))
+    const requested = url.searchParams.get('media')
+    const media: MediaFilter | null =
+      !requested || requested === 'all' ? 'all' : requested === 'photo' || requested === 'video' ? requested : null
+    if (!media) throw new AppError(400, 'bad_request', 'Unbekannter Filter.')
+    return json(await listPhotoPage(scope, cursor, media))
   } catch (error) {
     return errorResponse(error)
   }

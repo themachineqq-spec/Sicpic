@@ -12,7 +12,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
-    include: ['lib/**/*.test.ts', 'tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    include: ['lib/**/*.test.ts', 'lib/**/*.test.tsx', 'tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     exclude: ['tests/db/**', 'tests/e2e/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',

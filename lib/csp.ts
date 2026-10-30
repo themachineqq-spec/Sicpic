@@ -51,6 +51,7 @@ export function buildContentSecurityPolicy(options: CspOptions): string {
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data: https://*.r2.cloudflarestorage.com",
+    "media-src 'self' blob: https://*.r2.cloudflarestorage.com",
     "font-src 'self'",
     `connect-src 'self' ${supabase.https} ${supabase.wss} https://*.r2.cloudflarestorage.com`,
     // blob: lets heic2any start its decoder with Worker(URL.createObjectURL(...)).

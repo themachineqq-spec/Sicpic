@@ -1,5 +1,5 @@
 import { AppError } from '@/lib/errors'
-import type { OriginalExtension, ScreenshotExtension } from '@/lib/content-types'
+import type { OriginalExtension, ScreenshotExtension, VideoExtension } from '@/lib/content-types'
 import type { PhotoVariant } from '@/lib/types'
 
 const UUID_RE =
@@ -9,6 +9,7 @@ export const LIMITS = {
   originalBytes: 50 * 1024 * 1024,
   displayBytes: 12 * 1024 * 1024,
   thumbBytes: 800 * 1024,
+  videoBytes: 4 * 1024 * 1024 * 1024,
   screenshotBytes: 8 * 1024 * 1024,
   pageSize: 24,
   maxPageSize: 48,
@@ -53,14 +54,35 @@ export function photoObjectKeys(memberId: string, photoId: string, extension: Or
   return keys
 }
 
+export function videoObjectKeys(memberId: string, photoId: string, extension: VideoExtension) {
+  const member = assertUuid(memberId, 'Mitglied')
+  const photo = assertUuid(photoId, 'Video')
+  const base = `members/${member}/photos/${photo}`
+  const keys = {
+    memberId: member,
+    photoId: photo,
+    original: `${base}/original.${extension}`,
+    thumb: `${base}/thumb.webp`,
+  }
+  assertSafeObjectKey(keys.original)
+  assertSafeObjectKey(keys.thumb)
+  return keys
+}
+
 export function keyForVariant(
-  photo: { originalKey: string; displayKey: string; thumbKey: string },
+  photo: { originalKey: string; displayKey: string | null; thumbKey: string | null },
   variant: PhotoVariant,
 ): string {
   const key =
     variant === 'original' ? photo.originalKey : variant === 'display' ? photo.displayKey : photo.thumbKey
+  if (!key) throw new AppError(404, 'not_found', 'Diese Version gibt es nicht.')
   assertSafeObjectKey(key)
   return key
+}
+
+export function contentDispositionAttachment(filename: string): string {
+  const cleaned = sanitizeFilename(filename).replace(/["\\]/g, '') || 'video'
+  return `attachment; filename="${cleaned}"; filename*=UTF-8''${encodeURIComponent(cleaned)}`
 }
 
 export function feedbackScreenshotKey(

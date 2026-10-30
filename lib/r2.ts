@@ -1,11 +1,15 @@
 import 'server-only'
 
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { AppError } from '@/lib/errors'
@@ -66,11 +70,12 @@ export function createR2Signer(): ObjectSigner {
       })
       return getSignedUrl(s3, command, { expiresIn })
     },
-    async signGet({ key, expiresIn }) {
+    async signGet({ key, expiresIn, responseContentDisposition }) {
       assertSafeObjectKey(key)
       const command = new GetObjectCommand({
         Bucket,
         Key: key,
+        ResponseContentDisposition: responseContentDisposition,
       })
       return getSignedUrl(s3, command, { expiresIn })
     },
@@ -86,6 +91,56 @@ function isMissingObject(error: unknown): boolean {
       ? Number(metadata.httpStatusCode)
       : 0
   return name === 'NotFound' || name === 'NoSuchKey' || status === 404
+}
+
+export async function createMultipartUpload(key: string, contentType: string): Promise<string> {
+  assertSafeObjectKey(key)
+  const result = await getR2Client().send(
+    new CreateMultipartUploadCommand({ Bucket: bucket(), Key: key, ContentType: contentType }),
+  )
+  if (!result.UploadId) throw new AppError(500, 'server', 'Der Upload konnte nicht gestartet werden.')
+  return result.UploadId
+}
+
+export async function signUploadPart(input: {
+  key: string
+  uploadId: string
+  partNumber: number
+  expiresIn: number
+}): Promise<string> {
+  assertSafeObjectKey(input.key)
+  const command = new UploadPartCommand({
+    Bucket: bucket(),
+    Key: input.key,
+    UploadId: input.uploadId,
+    PartNumber: input.partNumber,
+  })
+  return getSignedUrl(getR2Client(), command, { expiresIn: input.expiresIn })
+}
+
+export async function completeMultipartUpload(input: {
+  key: string
+  uploadId: string
+  parts: { partNumber: number; etag: string }[]
+}): Promise<void> {
+  assertSafeObjectKey(input.key)
+  await getR2Client().send(
+    new CompleteMultipartUploadCommand({
+      Bucket: bucket(),
+      Key: input.key,
+      UploadId: input.uploadId,
+      MultipartUpload: {
+        Parts: input.parts.map((part) => ({ ETag: part.etag, PartNumber: part.partNumber })),
+      },
+    }),
+  )
+}
+
+export async function abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+  assertSafeObjectKey(key)
+  await getR2Client().send(
+    new AbortMultipartUploadCommand({ Bucket: bucket(), Key: key, UploadId: uploadId }),
+  )
 }
 
 export async function headR2Object(key: string): Promise<{ byteSize: number; contentType?: string }> {

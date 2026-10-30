@@ -21,7 +21,7 @@ async function FolderLoader() {
     <PhotoGallery
       scope="mine"
       title="Mein Ordner"
-      intro="Nur deine Fotos. Löschen geht nur hier."
+      intro="Deine Fotos und Videos. Löschen geht nur hier."
       initial={page.photos}
       initialCursor={page.nextCursor}
       canDelete

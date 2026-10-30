@@ -230,4 +230,33 @@ describe('photo service', () => {
       }),
     ).rejects.toMatchObject({ message: 'Die Vorschau ist zu groß oder leer.' })
   })
+
+  it('stores a video only when the finished object matches the declared size', async () => {
+    const { completeVideoUpload } = await import('@/lib/photo-service')
+    const input = {
+      member,
+      photoId: '44444444-4444-4444-8444-444444444444',
+      filename: 'clip.mp4',
+      contentType: 'video/mp4',
+      width: 16,
+      height: 9,
+      capturedAt: '2024-07-01T12:00:00.000Z',
+      durationMs: 1000,
+      codec: 'h264' as string | null,
+      byteSize: 1000,
+      hasThumb: false,
+    }
+    await expect(completeVideoUpload({ ...input, capturedAt: '1800-01-01T00:00:00.000Z' })).rejects.toMatchObject({ status: 400 })
+    r2.headR2Object.mockResolvedValueOnce({ byteSize: 10 })
+    await expect(completeVideoUpload(input)).rejects.toMatchObject({ message: 'Die Videodatei ist unvollständig.' })
+    r2.headR2Object.mockResolvedValueOnce({ byteSize: 1000 }).mockResolvedValueOnce({ byteSize: 2 * 1024 * 1024 })
+    await expect(completeVideoUpload({ ...input, hasThumb: true })).rejects.toMatchObject({ message: 'Die Vorschau ist zu groß oder leer.' })
+    r2.headR2Object.mockResolvedValue({ byteSize: 1000 })
+    supabase.from.mockReturnValueOnce({ insert: () => ({ error: null }) })
+    await expect(completeVideoUpload({ ...input, hasThumb: true })).resolves.toEqual({ id: input.photoId })
+    supabase.from.mockReturnValueOnce({ insert: () => ({ error: { code: '23505', message: 'duplicate secret' } }) })
+    await expect(completeVideoUpload(input)).rejects.toMatchObject({ status: 409 })
+    supabase.from.mockReturnValueOnce({ insert: () => ({ error: { code: 'XX', message: 'secret schema' } }) })
+    await expect(completeVideoUpload(input)).rejects.toMatchObject({ message: 'Die Videodaten konnten nicht gespeichert werden.' })
+  })
 })

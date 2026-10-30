@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AppError } from '@/lib/errors'
-import { fileExtension, isHeicExtension, resolveOriginalType, resolveScreenshotType } from '@/lib/content-types'
+import { fileExtension, isHeicExtension, isVideoFile, resolveOriginalType, resolveScreenshotType, resolveVideoType } from '@/lib/content-types'
 
 describe('file types', () => {
   it('detects HEIC from the type or a missing browser type plus extension', () => {
@@ -24,5 +24,11 @@ describe('file types', () => {
     expect(fileExtension('ohne')).toBe('')
     expect(isHeicExtension('heif')).toBe(true)
     expect(() => resolveScreenshotType('image/heic')).toThrow(/Screenshots/)
+    expect(resolveVideoType('video/quicktime', 'a.mp4')).toEqual({ contentType: 'video/quicktime', extension: 'mov' })
+    expect(resolveVideoType('', 'clip.webm')).toEqual({ contentType: 'video/webm', extension: 'webm' })
+    expect(resolveVideoType('video/3gpp', 'a.3gp').extension).toBe('3gp')
+    expect(isVideoFile({ name: 'a.mov', type: '' })).toBe(true)
+    expect(isVideoFile({ name: 'a.jpg', type: 'image/jpeg' })).toBe(false)
+    expect(() => resolveVideoType('video/ogg', 'a.ogg')).toThrow(/MP4/)
   })
 })
