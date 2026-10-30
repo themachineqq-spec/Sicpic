@@ -47,10 +47,13 @@ export const memberRoleSchema = z.object({
   role: z.enum(['admin', 'member']),
 })
 
+const ZOD_DEFAULT = /^(Invalid input|Invalid option|Too (big|small)|Expected )|^Unrecognized key/
+
 export function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value)
   if (!result.success) {
-    const message = result.error.issues[0]?.message ?? 'Eingabe ist ungültig.'
+    const raw = result.error.issues[0]?.message
+    const message = raw && !ZOD_DEFAULT.test(raw) ? raw : 'Eingabe ist ungültig.'
     throw new AppError(400, 'bad_request', message)
   }
   return result.data

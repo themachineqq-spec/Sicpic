@@ -8,5 +8,7 @@ describe('login carousel', () => {
     expect(nextCarouselIndex(0)).toBe(1)
     expect(nextCarouselIndex(4)).toBe(5)
     expect(nextCarouselIndex(loginSlides.length - 1)).toBe(0)
+    expect(nextCarouselIndex(4, 1)).toBe(0)
+    expect(nextCarouselIndex(-1, 6)).toBe(0)
   })
 })

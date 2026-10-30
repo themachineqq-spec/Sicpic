@@ -4,6 +4,7 @@ import {
   decodeCursor,
   encodeCursor,
   formatDayKey,
+  formatPhotoTime,
   groupPhotosByMonth,
   parseExifDateTime,
   resolveCapturedAt,
@@ -123,5 +124,30 @@ describe('cursor', () => {
       id: '11111111-1111-4111-8111-111111111111',
     })
     expect(decodeCursor('nope')).toBeNull()
+    expect(decodeCursor(null)).toBeNull()
+    expect(decodeCursor('|id-only')).toBeNull()
+    expect(decodeCursor('not-a-date|id')).toBeNull()
+  })
+})
+
+describe('parseExifDateTime edges', () => {
+  it('keeps absolute timestamps and drops corrupt values', () => {
+    expect(parseExifDateTime(new Date('2024-07-01T12:00:00.000Z'))?.toISOString()).toBe('2024-07-01T12:00:00.000Z')
+    expect(parseExifDateTime(new Date('not-a-date'))).toBeNull()
+    expect(parseExifDateTime(12)).toBeNull()
+    expect(parseExifDateTime('   ')).toBeNull()
+    expect(parseExifDateTime('2024-07-01T12:00:00Z')?.toISOString()).toBe('2024-07-01T12:00:00.000Z')
+    expect(parseExifDateTime('2024-07-01T12:00:00+02:00')?.toISOString()).toBe('2024-07-01T10:00:00.000Z')
+    expect(parseExifDateTime('not-a-timestampZ')).toBeNull()
+    expect(parseExifDateTime('2024:13:01 00:00:00')).toBeNull()
+    expect(parseExifDateTime('2024:07:01 15:30:45', 'bad')).toEqual(parseExifDateTime('2024:07:01 15:30:45'))
+    expect(formatPhotoTime('2024-07-01T13:30:45.000Z')).toMatch(/2024/)
+    expect(comparePhotosNewestFirst({ id: 'b', capturedAt: 'nope' }, { id: 'a', capturedAt: 'also-nope' })).toBe(
+      'a'.localeCompare('b'),
+    )
+    expect(groupPhotosByMonth([])).toEqual([])
+    const ancient = new Date('1960-01-01T00:00:00.000Z')
+    const resolved = resolveCapturedAt({ dateTimeOriginal: '1960:01:01 00:00:00', uploadDate: ancient })
+    expect(Math.abs(resolved.getTime() - Date.now())).toBeLessThan(5000)
   })
 })

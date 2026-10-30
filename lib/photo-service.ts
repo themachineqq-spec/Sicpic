@@ -5,6 +5,8 @@ import { isReasonableCaptureDate } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
 import { LIMITS, photoObjectKeys, sanitizeFilename } from '@/lib/keys'
 import { readPresignExpiry } from '@/lib/presign'
+import { completeE2EPhoto, listE2EPhotos } from '@/lib/e2e-store'
+import { isE2ERequest } from '@/lib/e2e-guard'
 import { createR2Signer, headR2Object } from '@/lib/r2'
 import { createClient } from '@/lib/supabase/server'
 import type { Member, PhotoRecord, PhotoScope } from '@/lib/types'
@@ -76,6 +78,7 @@ export async function deletePhotoRecord(id: string): Promise<void> {
 }
 
 export async function listPhotoPage(scope: PhotoScope, cursor: { at: string; id: string } | null) {
+  if (await isE2ERequest()) return listE2EPhotos(scope, cursor)
   const supabase = await createClient()
   const limit = LIMITS.pageSize
   const { data, error } = await supabase.rpc('list_photos', {
@@ -130,6 +133,7 @@ export async function completePhotoUpload(input: {
   height: number | null
   capturedAt: string
 }) {
+  if (await isE2ERequest()) return completeE2EPhoto(input)
   const captured = new Date(input.capturedAt)
   if (!isReasonableCaptureDate(captured)) {
     throw new AppError(400, 'bad_request', 'Das Aufnahmedatum ist ungültig.')

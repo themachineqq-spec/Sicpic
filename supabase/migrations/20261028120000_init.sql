@@ -127,6 +127,13 @@ grant select, insert, update, delete on public.members to authenticated;
 grant select, insert, delete on public.photos to authenticated;
 grant select, insert, update on public.feedback to authenticated;
 
+-- service_role umgeht RLS, braucht aber eigene Tabellenrechte. Ohne diese
+-- Grants kann der Server weder die erste Admin-Person verknüpfen noch die
+-- Objekte eines Mitglieds beim Entfernen lesen.
+grant select, insert, update, delete on public.members to service_role;
+grant select, insert, update, delete on public.photos to service_role;
+grant select, insert, update, delete on public.feedback to service_role;
+
 create policy members_select_group on public.members
   for select to authenticated
   using (public.is_group_member());

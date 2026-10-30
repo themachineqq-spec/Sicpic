@@ -39,7 +39,39 @@ Prüfen:
 npm test
 npm run lint
 npm run typecheck
+npm run build
 ```
+
+`npm test` führt die Unit-, Routen- und Komponententests mit Vitest aus und verlangt mindestens 85 Prozent Zeilen- und Zweigabdeckung für `lib`, `app/api` und `app/auth`. Jeder Test läuft isoliert, ohne gemeinsames Daten und ohne echtes Netz. Zeiten in den Tests sind fest (gefälschte Timer), damit das Karussell nicht von der Uhr abhängt.
+
+Die Datenbanktests liegen daneben und brauchen ein lokales Postgres 16. Die Migration aus `supabase/migrations` wird darin wirklich ausgeführt. Rolle, Tabellen und Policies kommen aus dieser Datei, nicht aus einem nachgebauten Schema.
+
+```bash
+docker run --rm -e POSTGRES_USER=sicpic -e POSTGRES_PASSWORD=sicpic -e POSTGRES_DB=sicpic_test -p 5432:5432 postgres:16
+DATABASE_URL=postgres://sicpic:sicpic@127.0.0.1:5432/sicpic_test npm run test:db
+```
+
+Der End-to-End-Lauf startet die gebaute App (`next start`) und spricht sie mit Playwright an. Dafür gibt es einen Test-Login, der nur gleichzeitig beide Variablen `SICPIC_E2E_AUTH=1` und `SICPIC_E2E_LOCAL=1` sieht, nur auf `localhost` oder `127.0.0.1` antwortet und sich abschaltet, sobald `NETLIFY` gesetzt ist oder `CONTEXT` `production`, `deploy-preview` oder `branch-deploy` ist. Auf Netlify lässt sich der Bypass damit nicht einschalten. Das Cookie `sicpic-e2e` muss `SICPIC_E2E_TOKEN` entsprechen.
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co \
+NEXT_PUBLIC_SUPABASE_ANON_KEY=test-anon-key \
+NEXT_PUBLIC_APP_URL=http://127.0.0.1:4173 \
+npm run build
+
+SICPIC_E2E_AUTH=1 SICPIC_E2E_LOCAL=1 SICPIC_E2E_TOKEN=e2e-token \
+NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co \
+NEXT_PUBLIC_SUPABASE_ANON_KEY=test-anon-key \
+npm run start -- -p 4173
+```
+
+In einem zweiten Terminal:
+
+```bash
+SICPIC_URL=http://127.0.0.1:4173 SICPIC_E2E_TOKEN=e2e-token npm run test:e2e
+```
+
+Dieselben drei Stufen laufen in GitHub Actions bei jedem Pull Request und bei jedem Push auf `main`: Lint, Typprüfung, Unit-Tests mit Abdeckung, Build, Postgres-Integration und der Playwright-Lauf.
 
 Die App wird nicht von diesem Repository aus deployed. Deployment macht Netlify, sobald die Site dort verbunden ist.
 
