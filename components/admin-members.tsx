@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
+import { invalidateSessionCache, writeSessionCache } from "@/lib/session-cache";
 import type { Member, MemberRole, OpenInvite } from "@/lib/types";
 
 export function AdminMembers({
@@ -15,6 +16,10 @@ export function AdminMembers({
   selfId: string;
 }) {
   const router = useRouter();
+
+  useEffect(() => {
+    writeSessionCache("members", members);
+  }, [members]);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<MemberRole>("member");
@@ -38,6 +43,7 @@ export function AdminMembers({
       setEmail("");
       setDisplayName("");
       setRole("member");
+      invalidateSessionCache("members");
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Einladen fehlgeschlagen.");
@@ -80,6 +86,7 @@ export function AdminMembers({
       setInviteLink(created.invite.url);
       setInviteName("");
       setInviteRole("member");
+      invalidateSessionCache("members");
       void shareLink(created.invite.url);
       router.refresh();
     } catch (caught) {
@@ -104,6 +111,7 @@ export function AdminMembers({
     setError(null);
     try {
       await api(`/api/members/${id}`, { method: "PATCH", body: JSON.stringify({ role: nextRole }) });
+      invalidateSessionCache("members");
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Rolle nicht gespeichert.");
@@ -115,6 +123,8 @@ export function AdminMembers({
     setError(null);
     try {
       await api(`/api/members/${member.id}`, { method: "DELETE" });
+      invalidateSessionCache("members");
+      invalidateSessionCache("gallery:");
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Entfernen fehlgeschlagen.");

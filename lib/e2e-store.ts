@@ -172,13 +172,27 @@ export function completeE2EPhoto(input: {
   return { id: keys.photoId }
 }
 
+export function listE2EPeople(scope: 'group' | 'mine'): { id: string; name: string }[] {
+  const names = new Map<string, string>()
+  for (const photo of loadState().photos) {
+    if (scope === 'mine' && photo.ownerId !== E2E_MEMBER_ID) continue
+    names.set(photo.ownerId, photo.uploaderName)
+  }
+  if (names.size === 0) names.set(E2E_MEMBER_ID, 'E2E')
+  return [...names.entries()].map(([id, name]) => ({ id, name }))
+}
+
 export function listE2EPhotos(
   scope: 'group' | 'mine',
   cursor: { at: string; id: string } | null,
   media: MediaFilter = 'all',
+  filter: { ownerId?: string | null; from?: string | null; to?: string | null } = {},
 ) {
   const filtered = loadState().photos
     .filter((photo) => (media === 'all' || (photo.mediaType ?? 'photo') === media) && (scope === 'group' || photo.ownerId === E2E_MEMBER_ID))
+    .filter((photo) => !filter.ownerId || photo.ownerId === filter.ownerId)
+    .filter((photo) => !filter.from || photo.capturedAt >= filter.from)
+    .filter((photo) => !filter.to || photo.capturedAt < filter.to)
     .sort((a, b) => (a.capturedAt === b.capturedAt ? b.id.localeCompare(a.id) : a.capturedAt < b.capturedAt ? 1 : -1))
   const start = cursor ? filtered.findIndex((photo) => photo.capturedAt === cursor.at && photo.id === cursor.id) + 1 : 0
   const page = filtered.slice(Math.max(start, 0), Math.max(start, 0) + 24)

@@ -396,4 +396,25 @@ describe('postgres RLS migration', () => {
       await client.end()
     }
   })
+
+  it('applies person and date filters in the keyset listing', async () => {
+    const filtered = await withRole(userA, 'authenticated', async (client) => {
+      const byOwner = await client.query(
+        `select id from public.list_photos('group', null, null, 10, 'all', $1, null, null)`,
+        [adminB],
+      )
+      const byDate = await client.query(
+        `select id from public.list_photos('group', null, null, 10, 'photo', null, '2023-01-01T00:00:00Z', null)`,
+      )
+      const people = await client.query(`select id from public.list_uploaders('group') order by id`)
+      return {
+        owner: byOwner.rows.map((row) => row.id),
+        dated: byDate.rows.map((row) => row.id),
+        people: people.rows.map((row) => row.id),
+      }
+    })
+    expect(filtered.owner).toEqual([photoB])
+    expect(filtered.dated).toEqual([photoB])
+    expect(filtered.people).toEqual([adminA, adminB].sort())
+  })
 })

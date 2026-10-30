@@ -1,6 +1,7 @@
 import { createRequestAccess } from '@/lib/auth'
 import { AppError } from '@/lib/errors'
 import { errorResponse, json } from '@/lib/http'
+import { parseApiListFilter } from '@/lib/gallery-filters'
 import { listPhotoMonths } from '@/lib/photo-service'
 import type { MediaFilter, PhotoScope } from '@/lib/types'
 
@@ -15,7 +16,9 @@ export async function GET(request: Request) {
     const scope: PhotoScope = url.searchParams.get('scope') === 'mine' ? 'mine' : 'group'
     const requested = url.searchParams.get('media')
     const media: MediaFilter = requested === 'photo' || requested === 'video' ? requested : 'all'
-    return json({ months: await listPhotoMonths(scope, media) })
+    const filter = parseApiListFilter(url.searchParams)
+    if (!filter) throw new AppError(400, 'bad_request', 'Der Filter ist ungültig.')
+    return json({ months: await listPhotoMonths(scope, media, filter) })
   } catch (error) {
     return errorResponse(error)
   }

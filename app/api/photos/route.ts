@@ -1,6 +1,7 @@
 import { createRequestAccess } from '@/lib/auth'
 import { decodeCursor } from '@/lib/dates'
 import { AppError } from '@/lib/errors'
+import { parseApiListFilter } from '@/lib/gallery-filters'
 import { errorResponse, json, readJson } from '@/lib/http'
 import { completePhotoUpload, listPhotoPage } from '@/lib/photo-service'
 import { parseInput, completePhotoSchema } from '@/lib/validators'
@@ -24,7 +25,9 @@ export async function GET(request: Request) {
     const media: MediaFilter | null =
       !requested || requested === 'all' ? 'all' : requested === 'photo' || requested === 'video' ? requested : null
     if (!media) throw new AppError(400, 'bad_request', 'Unbekannter Filter.')
-    return json(await listPhotoPage(scope, cursor, media))
+    const filter = parseApiListFilter(url.searchParams)
+    if (!filter) throw new AppError(400, 'bad_request', 'Der Filter ist ungültig.')
+    return json(await listPhotoPage(scope, cursor, media, filter))
   } catch (error) {
     return errorResponse(error)
   }

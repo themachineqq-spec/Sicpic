@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { sortPhotosNewestFirst } from "@/lib/dates";
+import {
+  filterRangeInstants,
+  filtersActive,
+  filtersToQuery,
+  galleryCacheKey,
+  indexPhotos,
+  parseGalleryFilters,
+  selectPhotos,
+  type GalleryFilters,
+} from "@/lib/gallery-filters";
+import { invalidateSessionCache, writeSessionCache } from "@/lib/session-cache";
 import type { GalleryPhoto, MediaFilter, PhotoScope } from "@/lib/types";
 import { Lightbox } from "@/components/lightbox";
 import { Uploader } from "@/components/uploader";
@@ -27,13 +38,17 @@ export function PhotoGallery({
   canDelete: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [extra, setExtra] = useState<GalleryPhoto[]>([]);
   const [cursor, setCursor] = useState(initialCursor);
   const [hidden, setHidden] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [months, setMonths] = useState<{ monthKey: string; photoCount: number }[]>([]);
-  const [kind, setKind] = useState<MediaFilter>("all");
+  const [people, setPeople] = useState<{ id: string; name: string }[]>([]);
+  const [filters, setFilters] = useState<GalleryFilters>(() => parseGalleryFilters(searchParams ?? new URLSearchParams()));
+  const deferredFilters = useDeferredValue(filters);
   const [replaced, setReplaced] = useState<GalleryPhoto[] | null>(null);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
@@ -41,21 +56,42 @@ export function PhotoGallery({
   const sentinel = useRef<HTMLDivElement | null>(null);
   const displayRequest = useRef(0);
 
-  const merged = new Map<string, GalleryPhoto>();
-  for (const photo of initial) merged.set(photo.id, photo);
-  for (const photo of extra) merged.set(photo.id, photo);
-  const base = replaced ?? [...merged.values()];
-  const photos = sortPhotosNewestFirst(base.filter((photo) => !hidden.includes(photo.id)));
+  const loaded = useMemo(() => {
+    const merged = new Map<string, GalleryPhoto>();
+    for (const photo of initial) merged.set(photo.id, photo);
+    for (const photo of extra) merged.set(photo.id, photo);
+    const base = replaced ?? [...merged.values()];
+    return sortPhotosNewestFirst(base.filter((photo) => !hidden.includes(photo.id)));
+  }, [initial, extra, replaced, hidden]);
+  const index = useMemo(() => indexPhotos(loaded), [loaded]);
+  const photos = useMemo(() => selectPhotos(index, deferredFilters), [index, deferredFilters]);
+  const ownerOptions = people.length > 0 ? people : index.owners;
+
+  function listQuery(nextFilters: GalleryFilters, nextCursor: string | null) {
+    const range = filterRangeInstants(nextFilters);
+    const params = new URLSearchParams({ scope, media: nextFilters.media });
+    if (nextCursor) params.set("cursor", nextCursor);
+    if (nextFilters.ownerId) params.set("owner", nextFilters.ownerId);
+    if (range.from) params.set("from", range.from);
+    if (range.to) params.set("to", range.to);
+    return `/api/photos?${params.toString()}`;
+  }
+
+  function updateFilters(next: GalleryFilters) {
+    setFilters(next);
+    setOpenIndex(null);
+    const query = filtersToQuery(next);
+    startTransition(() => {
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    });
+  }
 
   async function loadMore() {
     if (!cursor || loading) return;
     setLoading(true);
     setError(null);
     try {
-      const media = kind === "all" ? "" : `&media=${kind}`;
-      const page = await api<{ photos: GalleryPhoto[]; nextCursor: string | null }>(
-        `/api/photos?scope=${scope}&cursor=${encodeURIComponent(cursor)}${media}`,
-      );
+      const page = await api<{ photos: GalleryPhoto[]; nextCursor: string | null }>(listQuery(filters, cursor));
       if (replaced) setReplaced((current) => [...(current ?? []), ...page.photos]);
       else setExtra((current) => [...current, ...page.photos]);
       setCursor(page.nextCursor);
@@ -68,7 +104,12 @@ export function PhotoGallery({
 
   useEffect(() => {
     let cancelled = false;
-    void api<{ months?: { monthKey: string; photoCount: number }[] }>(`/api/photos/months?scope=${scope}&media=${kind}`)
+    const range = filterRangeInstants(filters);
+    const params = new URLSearchParams({ scope, media: filters.media });
+    if (filters.ownerId) params.set("owner", filters.ownerId);
+    if (range.from) params.set("from", range.from);
+    if (range.to) params.set("to", range.to);
+    void api<{ months?: { monthKey: string; photoCount: number }[] }>(`/api/photos/months?${params.toString()}`)
       .then((result) => {
         if (!cancelled) setMonths(result.months ?? []);
       })
@@ -78,7 +119,44 @@ export function PhotoGallery({
     return () => {
       cancelled = true;
     };
-  }, [scope, kind]);
+  }, [scope, filters]);
+
+  useEffect(() => {
+    if (scope !== "group") return;
+    let cancelled = false;
+    void api<{ people?: { id: string; name: string }[] }>(`/api/photos/people?scope=${scope}`)
+      .then((result) => {
+        if (!cancelled && Array.isArray(result.people)) setPeople(result.people);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
+
+  useEffect(() => {
+    if (!filtersActive(filters)) return;
+    let cancelled = false;
+    void api<{ photos?: GalleryPhoto[]; nextCursor: string | null }>(listQuery(filters, null))
+      .then((page) => {
+        if (cancelled || !Array.isArray(page.photos)) return;
+        startTransition(() => {
+          setReplaced(page.photos ?? []);
+          setCursor(page.nextCursor);
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // Refetch the filtered page in the background. The grid already shows the local match.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, filters]);
+
+  useEffect(() => {
+    if (!loaded.length) return;
+    writeSessionCache(galleryCacheKey(scope, filters), { photos: loaded, nextCursor: cursor });
+  }, [scope, filters, loaded, cursor]);
 
   useEffect(() => {
     const node = sentinel.current;
@@ -127,9 +205,8 @@ export function PhotoGallery({
     setError(null);
     setLoading(true);
     try {
-      const media = kind === "all" ? "" : `&media=${kind}`;
       const page = await api<{ photos: GalleryPhoto[]; nextCursor: string | null }>(
-        `/api/photos?scope=${scope}&cursor=${encodeURIComponent(monthJumpCursor(monthKey))}${media}`,
+        listQuery(filters, monthJumpCursor(monthKey)),
       );
       setReplaced(page.photos);
       setCursor(page.nextCursor);
@@ -140,25 +217,13 @@ export function PhotoGallery({
     }
   }
 
-  async function chooseKind(next: MediaFilter) {
-    setKind(next);
+  function chooseKind(next: MediaFilter) {
     setError(null);
-    setOpenIndex(null);
-    if (next === "all") {
+    if (next === "all" && !filters.ownerId && !filters.from && !filters.to) {
       setReplaced(null);
       setCursor(initialCursor);
-      return;
     }
-    setLoading(true);
-    try {
-      const page = await api<{ photos: GalleryPhoto[]; nextCursor: string | null }>(`/api/photos?scope=${scope}&media=${next}`);
-      setReplaced(page.photos);
-      setCursor(page.nextCursor);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Der Filter konnte nicht geladen werden.");
-    } finally {
-      setLoading(false);
-    }
+    updateFilters({ ...filters, media: next });
   }
 
   async function remove(photo: GalleryPhoto) {
@@ -166,6 +231,7 @@ export function PhotoGallery({
     setError(null);
     try {
       await api(`/api/photos/${photo.id}`, { method: "DELETE" });
+      invalidateSessionCache("gallery:");
       setHidden((current) => [...current, photo.id]);
       router.refresh();
     } catch (caught) {
@@ -181,7 +247,7 @@ export function PhotoGallery({
           <p className="mt-1 text-sm text-muted">{intro}</p>
         </div>
       </div>
-      <div className="mb-4 flex gap-2" role="group" aria-label="Filter">
+      <div className="mb-4 flex flex-wrap items-end gap-2" role="group" aria-label="Filter">
         {(
           [
             ["all", "Alle"],
@@ -192,15 +258,60 @@ export function PhotoGallery({
           <button
             key={value}
             type="button"
-            aria-pressed={kind === value}
-            onClick={() => void chooseKind(value)}
-            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${kind === value ? "bg-accent text-accent-ink" : "bg-card text-muted ring-1 ring-line"}`}
+            aria-pressed={filters.media === value}
+            onClick={() => chooseKind(value)}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filters.media === value ? "bg-accent text-accent-ink" : "bg-card text-muted ring-1 ring-line"}`}
           >
             {label}
           </button>
         ))}
+        {scope === "group" ? (
+          <label className="text-sm font-medium text-muted">
+            Person
+            <select
+              aria-label="Person"
+              value={filters.ownerId ?? ""}
+              onChange={(event) => updateFilters({ ...filters, ownerId: event.target.value || null })}
+              className="ml-2 rounded-full bg-card px-3 py-1.5 text-sm text-foreground ring-1 ring-line"
+            >
+              <option value="">Alle Personen</option>
+              {ownerOptions.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label className="text-sm font-medium text-muted">
+          Von
+          <input
+            aria-label="Von"
+            type="date"
+            value={filters.from ?? ""}
+            onChange={(event) => updateFilters({ ...filters, from: event.target.value || null })}
+            className="ml-2 rounded-full bg-card px-3 py-1.5 text-sm ring-1 ring-line"
+          />
+        </label>
+        <label className="text-sm font-medium text-muted">
+          Bis
+          <input
+            aria-label="Bis"
+            type="date"
+            value={filters.to ?? ""}
+            onChange={(event) => updateFilters({ ...filters, to: event.target.value || null })}
+            className="ml-2 rounded-full bg-card px-3 py-1.5 text-sm ring-1 ring-line"
+          />
+        </label>
       </div>
-      {scope === "mine" ? <Uploader onUploaded={() => router.refresh()} /> : null}
+      {scope === "mine" ? (
+        <Uploader
+          onUploaded={() => {
+            invalidateSessionCache("gallery:");
+            router.refresh();
+          }}
+        />
+      ) : null}
       {scope === "mine" && photos.some((photo) => photo.thumbUrl && !photo.blurData) ? (
         <button
           type="button"
@@ -231,7 +342,11 @@ export function PhotoGallery({
       {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
       {photos.length === 0 ? (
         <p className="mt-10 rounded-3xl bg-card px-5 py-8 text-sm text-muted ring-1 ring-line">
-          {scope === "mine" ? "Dein Ordner ist noch leer. Lade das erste Foto hoch." : "Noch keine Fotos in der Gruppe."}
+          {loaded.length > 0
+            ? "Nichts passt zu diesem Filter."
+            : scope === "mine"
+              ? "Dein Ordner ist noch leer. Lade das erste Foto hoch."
+              : "Noch keine Fotos in der Gruppe."}
         </p>
       ) : (
         <VirtualGallery

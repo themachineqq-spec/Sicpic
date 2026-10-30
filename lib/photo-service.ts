@@ -6,7 +6,7 @@ import { AppError } from '@/lib/errors'
 import { stableSigningDate, stableThumbExpiry } from '@/lib/images/thumbs'
 import { LIMITS, photoObjectKeys, photoThumbKeys, sanitizeFilename, videoObjectKeys } from '@/lib/keys'
 import { readPresignExpiry } from '@/lib/presign'
-import { completeE2EPhoto, listE2EPhotos } from '@/lib/e2e-store'
+import { completeE2EPhoto, listE2EPeople, listE2EPhotos } from '@/lib/e2e-store'
 import { isE2ERequest } from '@/lib/e2e-guard'
 import { createR2Signer, headR2Object } from '@/lib/r2'
 import { createClient } from '@/lib/supabase/server'
@@ -88,10 +88,22 @@ export async function deletePhotoRecord(id: string): Promise<void> {
   if (error) throw new AppError(500, 'server', 'Foto konnte nicht gelöscht werden.')
 }
 
-export async function listPhotoMonths(scope: PhotoScope, media: MediaFilter) {
+export type PhotoListFilter = {
+  ownerId?: string | null
+  from?: string | null
+  to?: string | null
+}
+
+export async function listPhotoMonths(scope: PhotoScope, media: MediaFilter, filter: PhotoListFilter = {}) {
   if (await isE2ERequest()) return []
   const supabase = await createClient()
-  const { data, error } = await supabase.rpc('photo_months', { p_scope: scope, p_media: media })
+  const { data, error } = await supabase.rpc('photo_months', {
+    p_scope: scope,
+    p_media: media,
+    p_owner: filter.ownerId ?? null,
+    p_from: filter.from ?? null,
+    p_to: filter.to ?? null,
+  })
   if (error) throw new AppError(500, 'server', 'Die Monate konnten nicht geladen werden.')
   return ((data ?? []) as { month_key: string; photo_count: number }[]).map((row) => ({
     monthKey: row.month_key,
@@ -110,12 +122,24 @@ export async function attachThumbSet(id: string, thumbKey: string, thumbLargeKey
   if (error) throw new AppError(403, 'forbidden', 'Die Vorschau konnte nicht gespeichert werden.')
 }
 
+export async function listUploaders(scope: PhotoScope): Promise<{ id: string; name: string }[]> {
+  if (await isE2ERequest()) return listE2EPeople(scope)
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('list_uploaders', { p_scope: scope })
+  if (error) throw new AppError(500, 'server', 'Die Personen konnten nicht geladen werden.')
+  return ((data ?? []) as { id: string; display_name: string }[]).map((row) => ({
+    id: row.id,
+    name: row.display_name,
+  }))
+}
+
 export async function listPhotoPage(
   scope: PhotoScope,
   cursor: { at: string; id: string } | null,
   media: MediaFilter = 'all',
+  filter: PhotoListFilter = {},
 ) {
-  if (await isE2ERequest()) return listE2EPhotos(scope, cursor, media)
+  if (await isE2ERequest()) return listE2EPhotos(scope, cursor, media, filter)
   const supabase = await createClient()
   const limit = LIMITS.pageSize
   const { data, error } = await supabase.rpc('list_photos', {
@@ -124,6 +148,9 @@ export async function listPhotoPage(
     p_cursor_id: cursor?.id ?? null,
     p_limit: limit + 1,
     p_media: media,
+    p_owner: filter.ownerId ?? null,
+    p_from: filter.from ?? null,
+    p_to: filter.to ?? null,
   })
   if (error) throw new AppError(500, 'server', 'Die Fotoliste konnte nicht geladen werden.')
   const rows = ((data ?? []) as PhotoRow[]).map(mapPhoto)
