@@ -1,5 +1,6 @@
 import { isHeicExtension, resolveOriginalType } from '@/lib/content-types'
 import { resolveCapturedAt } from '@/lib/dates'
+import { renderThumbSet } from '@/lib/images/render-thumbs'
 import { sanitizeFilename } from '@/lib/keys'
 
 export type PreparedPhoto = {
@@ -8,6 +9,9 @@ export type PreparedPhoto = {
   originalContentType: string
   display: Blob
   thumb: Blob
+  thumbLarge: Blob
+  blurData: string
+  thumbContentType: 'image/webp' | 'image/jpeg'
   width: number
   height: number
   capturedAt: Date
@@ -91,16 +95,19 @@ export async function preparePhotoFile(file: File): Promise<PreparedPhoto> {
   }
   const bitmap = await bitmapFrom(source)
   try {
-    const [display, thumb] = await Promise.all([
+    const [display, thumbs] = await Promise.all([
       renderJpeg(bitmap, 2048, 0.86),
-      renderJpeg(bitmap, 480, 0.74),
+      renderThumbSet(bitmap, bitmap.width, bitmap.height),
     ])
     return {
       filename: sanitizeFilename(file.name),
       original: file,
       originalContentType: original.contentType,
       display,
-      thumb,
+      thumb: thumbs.small,
+      thumbLarge: thumbs.large,
+      blurData: thumbs.blurData,
+      thumbContentType: thumbs.contentType,
       width: bitmap.width,
       height: bitmap.height,
       capturedAt,

@@ -63,6 +63,8 @@ function photo(owner: Member): PhotoRecord {
     mediaType: 'photo',
     durationMs: null,
     codec: null,
+    thumbLargeKey: null,
+    blurData: null,
     byteSize: 10,
     width: 100,
     height: 80,

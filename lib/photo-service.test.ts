@@ -259,4 +259,16 @@ describe('photo service', () => {
     supabase.from.mockReturnValueOnce({ insert: () => ({ error: { code: 'XX', message: 'secret schema' } }) })
     await expect(completeVideoUpload(input)).rejects.toMatchObject({ message: 'Die Videodaten konnten nicht gespeichert werden.' })
   })
+
+  it('loads month counts and stores a regenerated thumbnail set', async () => {
+    const { attachThumbSet, listPhotoMonths } = await import('@/lib/photo-service')
+    supabase.rpc.mockResolvedValueOnce({ data: [{ month_key: '2024-07', photo_count: 4 }], error: null })
+    await expect(listPhotoMonths('group', 'all')).resolves.toEqual([{ monthKey: '2024-07', photoCount: 4 }])
+    supabase.rpc.mockResolvedValueOnce({ data: null, error: { message: 'secret' } })
+    await expect(listPhotoMonths('mine', 'photo')).rejects.toMatchObject({ status: 500 })
+    supabase.rpc.mockResolvedValueOnce({ error: null })
+    await expect(attachThumbSet(member.id, 'members/a/thumb-320.webp', 'members/a/thumb-640.webp', 'data:image/jpeg;base64,aaaa')).resolves.toBeUndefined()
+    supabase.rpc.mockResolvedValueOnce({ error: { message: 'forbidden' } })
+    await expect(attachThumbSet(member.id, 'a', 'b', 'data:image/jpeg;base64,aaaa')).rejects.toMatchObject({ status: 403 })
+  })
 })

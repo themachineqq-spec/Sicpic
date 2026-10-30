@@ -140,7 +140,7 @@ export async function authorizePhotoUploadFromBody(
     photoId: string
     expiresIn?: number
     readBody: () => Promise<unknown>
-    parseBody: (body: unknown) => { filename: string; contentType?: string }
+    parseBody: (body: unknown) => { filename: string; contentType?: string; thumbContentType?: string }
   },
 ) {
   const member = await requireRequestMember(deps)
@@ -150,6 +150,7 @@ export async function authorizePhotoUploadFromBody(
     photoId: deps.photoId,
     filename: input.filename,
     contentType: input.contentType ?? '',
+    thumbContentType: input.thumbContentType,
     signer: deps.signer,
     expiresIn: deps.expiresIn,
   })

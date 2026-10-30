@@ -1,11 +1,13 @@
 import { resolveOriginalType, resolveScreenshotType } from '@/lib/content-types'
 import { AppError } from '@/lib/errors'
+import { THUMB_CACHE_CONTROL } from '@/lib/images/thumbs'
 import {
   assertSafeObjectKey,
   contentDispositionAttachment,
   feedbackScreenshotKey,
   keyForVariant,
   photoObjectKeys,
+  photoThumbKeys,
 } from '@/lib/keys'
 import { assertMember } from '@/lib/permissions'
 import type { Member, PhotoVariant } from '@/lib/types'
@@ -15,8 +17,8 @@ export const MIN_PRESIGN_EXPIRES_SECONDS = 60
 export const MAX_PRESIGN_EXPIRES_SECONDS = 600
 
 export type ObjectSigner = {
-  signPut(input: { key: string; contentType: string; expiresIn: number }): Promise<string>
-  signGet(input: { key: string; expiresIn: number; responseContentDisposition?: string }): Promise<string>
+  signPut(input: { key: string; contentType: string; expiresIn: number; cacheControl?: string }): Promise<string>
+  signGet(input: { key: string; expiresIn: number; responseContentDisposition?: string; signingDate?: Date }): Promise<string>
 }
 
 export type SignedTarget = {
@@ -31,6 +33,7 @@ export type PhotoUploadGrant = {
   original: SignedTarget
   display: SignedTarget
   thumb: SignedTarget
+  thumbLarge?: SignedTarget
 }
 
 export function readPresignExpiry(raw?: string | null): number {
@@ -51,21 +54,29 @@ export async function issuePhotoUploadUrls(input: {
   photoId: string
   filename: string
   contentType: string
+  thumbContentType?: string
   signer: ObjectSigner
   expiresIn?: number
 }): Promise<PhotoUploadGrant> {
   assertMember(input.member)
   const original = resolveOriginalType(input.contentType, input.filename)
   const keys = photoObjectKeys(input.member.id, input.photoId, original.extension)
+  const thumbExt = input.thumbContentType === 'image/webp' ? 'webp' : input.thumbContentType === 'image/jpeg' ? 'jpg' : null
+  const sized = thumbExt ? photoThumbKeys(input.member.id, input.photoId, thumbExt) : null
+  const thumbKey = sized?.thumb ?? keys.thumb
+  const thumbType = thumbExt === 'webp' ? 'image/webp' : 'image/jpeg'
   const expiresIn = input.expiresIn ?? DEFAULT_PRESIGN_EXPIRES_SECONDS
   if (expiresIn < MIN_PRESIGN_EXPIRES_SECONDS || expiresIn > MAX_PRESIGN_EXPIRES_SECONDS) {
     throw new AppError(500, 'config', 'Die Gültigkeit der signierten URL ist ungültig.')
   }
 
-  const [originalUrl, displayUrl, thumbUrl] = await Promise.all([
+  const [originalUrl, displayUrl, thumbUrl, thumbLargeUrl] = await Promise.all([
     input.signer.signPut({ key: keys.original, contentType: original.contentType, expiresIn }),
     input.signer.signPut({ key: keys.display, contentType: 'image/jpeg', expiresIn }),
-    input.signer.signPut({ key: keys.thumb, contentType: 'image/jpeg', expiresIn }),
+    input.signer.signPut({ key: thumbKey, contentType: thumbType, expiresIn, cacheControl: THUMB_CACHE_CONTROL }),
+    sized
+      ? input.signer.signPut({ key: sized.thumbLarge, contentType: thumbType, expiresIn, cacheControl: THUMB_CACHE_CONTROL })
+      : Promise.resolve(''),
   ])
 
   return {
@@ -73,7 +84,8 @@ export async function issuePhotoUploadUrls(input: {
     expiresIn,
     original: { key: keys.original, url: originalUrl, contentType: original.contentType },
     display: { key: keys.display, url: displayUrl, contentType: 'image/jpeg' },
-    thumb: { key: keys.thumb, url: thumbUrl, contentType: 'image/jpeg' },
+    thumb: { key: thumbKey, url: thumbUrl, contentType: thumbType },
+    thumbLarge: sized ? { key: sized.thumbLarge, url: thumbLargeUrl, contentType: thumbType } : undefined,
   }
 }
 

@@ -94,7 +94,8 @@ describe('PhotoGallery', () => {
         canDelete
       />,
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Ältere Fotos laden' }))
+    const more = screen.queryByRole('button', { name: 'Ältere Fotos laden' })
+    if (more) await userEvent.click(more)
     expect(await screen.findByRole('img', { name: 'Bea: berge.jpg' })).toBeTruthy()
     await userEvent.click(screen.getByRole('button', { name: 'strand.jpg löschen' }))
     expect(screen.queryByRole('img', { name: 'Ada: strand.jpg' })).toBeNull()

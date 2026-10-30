@@ -5,6 +5,7 @@ import { resolveVideoType } from '@/lib/content-types'
 import { AppError } from '@/lib/errors'
 import { videoObjectKeys } from '@/lib/keys'
 import { completeVideoUpload } from '@/lib/photo-service'
+import { THUMB_CACHE_CONTROL } from '@/lib/images/thumbs'
 import { readPresignExpiry } from '@/lib/presign'
 import {
   abortMultipartUpload,
@@ -28,7 +29,11 @@ export async function startVideoUpload(
   const keys = videoObjectKeys(member.id, photoId, video.extension)
   const uploadId = await createMultipartUpload(keys.original, video.contentType)
   const expiresIn = readPresignExpiry(process.env.PRESIGN_EXPIRES_SECONDS)
-  const thumbUrl = await createR2Signer().signPut({ key: keys.thumb, contentType: 'image/webp', expiresIn })
+  const signer = createR2Signer()
+  const [thumbUrl, thumbLargeUrl] = await Promise.all([
+    signer.signPut({ key: keys.thumb, contentType: 'image/webp', expiresIn, cacheControl: THUMB_CACHE_CONTROL }),
+    signer.signPut({ key: keys.thumbLarge, contentType: 'image/webp', expiresIn, cacheControl: THUMB_CACHE_CONTROL }),
+  ])
   return {
     photoId: keys.photoId,
     uploadId,
@@ -36,6 +41,7 @@ export async function startVideoUpload(
     partCount: plan.partCount,
     contentType: video.contentType,
     thumb: { url: thumbUrl, contentType: 'image/webp' },
+    thumbLarge: { url: thumbLargeUrl, contentType: 'image/webp' },
   }
 }
 

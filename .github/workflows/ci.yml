@@ -85,3 +85,37 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:4173
+
+  perf:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sicpic
+          POSTGRES_PASSWORD: sicpic
+          POSTGRES_DB: sicpic_perf
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sicpic -d sicpic_perf"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run perf
+        env:
+          DATABASE_URL: postgres://sicpic:sicpic@localhost:5432/sicpic_perf
+          PERF_P95_MS: "120"
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      - run: node scripts/perf-bundle.mjs

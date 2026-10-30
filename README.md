@@ -10,7 +10,7 @@ Die Oberfläche ist Deutsch. Auf dem Handy lässt sich Sicpic als App auf den Ho
 - **Gruppe:** alle Fotos aller Mitglieder, sortiert nach Aufnahmedatum. Pro Tag und Monat gruppiert. Antippen öffnet die große Ansicht und zeigt, wer hochgeladen hat.
 - **Formate:** JPEG, PNG, HEIC/HEIF und Video (MOV, MP4, 3GP, WebM). Fotos bleiben im Original. Der Browser erzeugt beim Foto-Upload eine JPEG-Anzeigeversion und eine kleine Vorschau. Videos werden nicht auf dem Server umgewandelt. Eine Vorschau entsteht im Browser aus einem Bild des Videos, wenn der Browser den Codec abspielen kann.
 - **Datum:** `DateTimeOriginal` aus den EXIF-Daten. Fehlt es, gilt das Uploaddatum. Fehlt die Zeitzone im EXIF, wird Europe/Berlin angenommen.
-- **Große Sammlungen:** die Chronik lädt seitenweise und zeigt nur Vorschaubilder. Originale werden nie alle auf einmal geladen.
+- **Große Sammlungen:** die Chronik lädt seitenweise (24, höchstens 48). Vorschaubilder sind WebP in 320 und 640 Pixeln, mit einem 16-Pixel-Platzhalter aus der Datenbank. Die Gruppe virtualisiert das Gitter, damit das Handy nicht zehntausende Knoten hält. Signierte Vorschau-URLs bleiben fünf Minuten gleich, die Datei selbst ist ein Jahr privat im Cache. Der Service Worker merkt sich Vorschaubilder am Objektpfad, ohne die Signatur. Wer noch alte JPEG-Vorschaubilder hat, erneuert sie im eigenen Ordner mit **Alte Vorschaubilder erneuern**. Eine Monatsleiste springt in der Chronik.
 - **Rückmeldung:** Fehler oder Wunsch, optional mit Screenshot. Admins filtern nach Art und Status und setzen den Status auf neu, in Arbeit oder erledigt.
 - **Mitglieder:** nur eingeladene E-Mail-Adressen können sich anmelden. Admins pflegen die Liste. Die erste Admin-Person kommt aus `INITIAL_ADMIN_EMAIL`.
 
@@ -92,7 +92,12 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon` `public` Key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` Key → `SUPABASE_SERVICE_ROLE_KEY` (nur Server, nie im Client)
-3. Unter **SQL Editor** zuerst `supabase/migrations/20261028120000_init.sql` ausführen, danach `supabase/migrations/20261030140000_video_media.sql`. Die erste Datei legt Tabellen, RLS-Policies und Hilfsfunktionen an. Die zweite ergänzt Videos in derselben Tabelle.
+3. Unter **SQL Editor** nacheinander ausführen:
+   - `supabase/migrations/20261028120000_init.sql`
+   - `supabase/migrations/20261030140000_video_media.sql`
+   - `supabase/migrations/20261030180000_perf_thumbs.sql`
+
+   Die erste Datei legt Tabellen, RLS-Policies und Hilfsfunktionen an. Die zweite ergänzt Videos. Die dritte legt die kleinen WebP-Vorschaubilder, den Platzhalter und die Monatszählung an.
 4. Unter **Authentication → Providers** E-Mail/Passwort und alle anderen Provider auslassen. Nur **Google** aktivieren.
 5. Unter **Authentication → URL Configuration**:
    - Site URL: `https://<site>.netlify.app`

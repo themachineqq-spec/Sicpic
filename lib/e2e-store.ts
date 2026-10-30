@@ -28,6 +28,7 @@ type StoredPhoto = {
   durationMs?: number | null
   codec?: string | null
   hasThumb?: boolean
+  blurData?: string | null
 }
 
 type PendingUpload = {
@@ -330,5 +331,7 @@ export function e2ePhotoRecord(photoId: string): PhotoRecord | null {
     mediaType: photo.mediaType ?? 'photo',
     durationMs: photo.durationMs ?? null,
     codec: photo.codec ?? null,
+    thumbLargeKey: null,
+    blurData: photo.blurData ?? null,
   }
 }
