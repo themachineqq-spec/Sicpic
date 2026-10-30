@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { LoginScreen } from "@/components/login-screen";
-import { ShellFallback } from "@/components/app-shell";
 import { getRequestAccess } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/config";
 
@@ -11,7 +10,7 @@ export default function Page({
   searchParams: Promise<{ fehler?: string; next?: string }>;
 }) {
   return (
-    <Suspense fallback={<ShellFallback />}>
+    <Suspense fallback={<div className="min-h-dvh bg-stone-950" />}>
       <HomeGate searchParams={searchParams} />
     </Suspense>
   );

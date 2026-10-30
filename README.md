@@ -22,6 +22,7 @@ Die Oberfläche ist Deutsch. Auf dem Handy lässt sich Sicpic als App auf den Ho
 - Der R2-Bucket ist privat. Der Browser lädt Dateien mit kurzlebigen signierten PUT-URLs direkt hoch. Ausgeliefert wird nur über signierte GET-URLs (wenige Minuten), und nur nachdem der Server Sitzung und Mitgliedschaft geprüft hat.
 - Schlüssel erzeugt der Server. Sie liegen immer unter `members/<mitglied>/…` oder `feedback/<mitglied>/…`.
 - Keine Geheimnisse im Repository. Vorlage: `.env.example`.
+- Jede HTML-Antwort bekommt eine Content-Security-Policy mit einem einmaligen Nonce. `script-src` erlaubt kein `unsafe-inline`. Dadurch kann Netlify das Badge-Skript `/.netlify/scripts/hud` nicht ausführen.
 
 ## Lokal starten
 
@@ -137,6 +138,10 @@ Die App muss über HTTPS laufen (Netlify). Lokal ist das Installieren unzuverlä
 2. Menü, dann **App installieren** oder **Zum Startbildschirm hinzufügen**.
 
 Der Service Worker speichert nur das App-Gerüst und die Icons, keine Fotos und keine API-Antworten. Bild-URLs sind nur wenige Minuten gültig.
+
+## Startseiten-Fotos
+
+Die sechs Hintergrundbilder liegen unter `public/carousel/`. Lizenz und Fotografen: [public/carousel/CREDITS.md](public/carousel/CREDITS.md).
 
 ## Hinweise zum Betrieb
 
