@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { buildContentSecurityPolicy } from '@/lib/csp'
+import { e2eMemberFromCookies, isE2EAuthEnabled, isLoopbackHost } from '@/lib/e2e-guard'
 
 // Netlify runs this proxy as an edge function. Keep the AWS SDK out of this
 // file. Presigned R2 URLs are issued only from Node route handlers.
@@ -25,6 +26,15 @@ function applyContentSecurityPolicy(request: NextRequest) {
   }
 
   return { contentSecurityPolicy, continueWith }
+}
+
+function e2eSession(request: NextRequest) {
+  if (!isE2EAuthEnabled() || !isLoopbackHost(request.headers.get('host'))) return null
+  return e2eMemberFromCookies(
+    request.cookies.get('sicpic-e2e')?.value,
+    request.cookies.get('sicpic-e2e-role')?.value,
+    process.env.SICPIC_E2E_TOKEN,
+  ).session
 }
 
 export async function proxy(request: NextRequest) {
@@ -52,7 +62,7 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getUser()
   const path = request.nextUrl.pathname
   const needsAuth = PROTECTED.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
-  if (needsAuth && !data.user) {
+  if (needsAuth && !data.user && !e2eSession(request)) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/'
     redirectUrl.search = ''

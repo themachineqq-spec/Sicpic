@@ -36,8 +36,8 @@ export function PhotoGallery({
   const displayRequest = useRef(0);
 
   const merged = new Map<string, GalleryPhoto>();
-  for (const photo of extra) merged.set(photo.id, photo);
   for (const photo of initial) merged.set(photo.id, photo);
+  for (const photo of extra) merged.set(photo.id, photo);
   const photos = sortPhotosNewestFirst([...merged.values()].filter((photo) => !hidden.includes(photo.id)));
   const groups = scope === "group" ? groupPhotosByMonth(photos) : [];
 

@@ -20,6 +20,10 @@ function required(name: string): string {
 
 let client: S3Client | undefined
 
+export function resetR2ClientForTests(): void {
+  client = undefined
+}
+
 export function getR2Client(): S3Client {
   if (!client) {
     const accountId = required('R2_ACCOUNT_ID')
@@ -102,7 +106,6 @@ export async function deleteR2Objects(keys: string[]): Promise<void> {
   for (const key of unique) assertSafeObjectKey(key)
   for (let index = 0; index < unique.length; index += 1000) {
     const chunk = unique.slice(index, index + 1000)
-    if (chunk.length === 0) continue
     await getR2Client().send(
       new DeleteObjectsCommand({
         Bucket: bucket(),

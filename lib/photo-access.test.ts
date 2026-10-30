@@ -2,11 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { AppError } from '@/lib/errors'
 import {
   authorizeFeedbackModeration,
+  authorizeFeedbackScreenshot,
   authorizePhotoDelete,
   authorizePhotoRead,
   authorizePhotoUpload,
   authorizePhotoUploadFromBody,
   authorizePhotoVariantRead,
+  authorizeThumbRefresh,
+  requireRequestMember,
 } from '@/lib/photo-access'
 import { readPresignExpiry } from '@/lib/presign'
 import type { ObjectSigner } from '@/lib/presign'
@@ -316,5 +319,75 @@ describe('presign expiry configuration', () => {
     expect(readPresignExpiry(null)).toBe(300)
     expect(readPresignExpiry('300')).toBe(300)
     expect(() => readPresignExpiry('86400')).toThrow(/600/)
+    expect(() => readPresignExpiry('59')).toThrow(AppError)
+    expect(() => readPresignExpiry('3.5')).toThrow(AppError)
+    expect(readPresignExpiry('')).toBe(300)
+    expect(readPresignExpiry('60')).toBe(60)
+  })
+})
+
+describe('thumbnail and screenshot grants', () => {
+  it('signs one thumb per known photo and skips an empty id list', async () => {
+    const { signer, gets } = signerMock()
+    const empty = await authorizeThumbRefresh({
+      getSession: async () => session,
+      getMember: async () => member,
+      signer,
+      getPhotos: async () => [],
+      ids: [],
+      expiresIn: 120,
+    })
+    expect(empty.thumbs).toEqual([])
+    const page = await authorizeThumbRefresh({
+      getSession: async () => session,
+      getMember: async () => member,
+      signer,
+      getPhotos: async () => [photo(member)],
+      ids: [photoId, photoId],
+      expiresIn: 120,
+    })
+    expect(page.thumbs).toHaveLength(1)
+    expect(gets[0]?.expiresIn).toBe(120)
+    expect(gets[0]?.key).toContain('/thumb.jpg')
+  })
+
+  it('puts a screenshot under the member feedback folder', async () => {
+    const { signer, puts } = signerMock()
+    const feedbackId = '55555555-5555-4555-8555-555555555555'
+    const grant = await authorizeFeedbackScreenshot({
+      getSession: async () => session,
+      getMember: async () => member,
+      signer,
+      feedbackId,
+      contentType: 'image/png',
+      expiresIn: 300,
+    })
+    expect(grant.key).toBe(`feedback/${member.id}/${feedbackId}/screenshot.png`)
+    expect(puts[0]?.contentType).toBe('image/png')
+    expect(grant.expiresIn).toBe(300)
+  })
+
+  it('refuses a session that does not match the member row', async () => {
+    await expect(
+      requireRequestMember({
+        getSession: async () => ({ userId: '99999999-9999-4999-8999-999999999999' }),
+        getMember: async () => member,
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+  })
+
+  it('rejects a signed upload whose expiry is outside the allowed window', async () => {
+    const { signer } = signerMock()
+    await expect(
+      authorizePhotoUpload({
+        getSession: async () => session,
+        getMember: async () => member,
+        signer,
+        photoId,
+        filename: 'a.jpg',
+        contentType: 'image/jpeg',
+        expiresIn: 10,
+      }),
+    ).rejects.toMatchObject({ status: 500, code: 'config' })
   })
 })

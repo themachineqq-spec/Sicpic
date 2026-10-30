@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildContentSecurityPolicy } from '@/lib/csp'
+import { buildContentSecurityPolicy, supabaseConnectSources } from '@/lib/csp'
 
 const nonce = 'abc123'
 
@@ -33,5 +33,15 @@ describe('buildContentSecurityPolicy', () => {
     const policy = buildContentSecurityPolicy({ nonce, isDev: false, includeScriptSelf: false })
     expect(policy).toContain(`script-src 'nonce-${nonce}' 'strict-dynamic'`)
     expect(policy).not.toContain("script-src 'self'")
+  })
+
+  it('adds a second supabase origin and ignores a broken url', () => {
+    const sources = supabaseConnectSources('https://other.supabase.co/rest/v1')
+    expect(sources.https).toContain('https://other.supabase.co')
+    expect(sources.wss).toContain('wss://other.supabase.co')
+    expect(supabaseConnectSources('not a url').https).toBe('https://uvmycgkhpbpeegdrasqv.supabase.co')
+    expect(supabaseConnectSources(null).https).toBe('https://uvmycgkhpbpeegdrasqv.supabase.co')
+    const policy = buildContentSecurityPolicy({ nonce, supabaseUrl: 'https://other.supabase.co' })
+    expect(policy).toContain('https://other.supabase.co')
   })
 })
