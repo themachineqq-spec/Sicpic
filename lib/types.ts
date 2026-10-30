@@ -1,5 +1,13 @@
 export type MemberRole = 'admin' | 'member'
 
+export type OpenInvite = {
+  id: string
+  displayName: string | null
+  role: MemberRole
+  createdAt: string
+  expiresAt: string
+}
+
 export type Member = {
   id: string
   userId: string | null

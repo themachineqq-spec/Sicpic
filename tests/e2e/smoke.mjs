@@ -95,10 +95,10 @@ await folder.getByText('Gespeichert').waitFor({ timeout: 20000 })
 await folder.getByRole('img', { name: /strand|sicpic-e2e\.jpg/ }).first().waitFor({ timeout: 20000 })
 for (const name of ['sample.mp4', 'sample.mov']) {
   await folder.locator('input[type="file"]').setInputFiles(join(process.cwd(), 'tests/fixtures', name))
-  await folder.getByRole('img', { name: `Video ${name}` }).waitFor({ timeout: 20000 })
+  await folder.getByRole('img', { name: `Video ${name}` }).first().waitFor({ timeout: 20000 })
 }
 await folder.getByRole('button', { name: 'Videos', exact: true }).click()
-await folder.getByRole('img', { name: 'Video sample.mp4' }).waitFor()
+await folder.getByRole('img', { name: 'Video sample.mp4' }).first().waitFor()
 const shots = process.env.SICPIC_SHOTS
 if (shots) {
   mkdirSync(shots, { recursive: true })
@@ -107,12 +107,48 @@ if (shots) {
   await folder.setViewportSize({ width: 1280, height: 800 })
   await folder.screenshot({ path: join(shots, 'sicpic-video-desktop.png') })
 }
-await folder.getByRole('img', { name: 'Video sample.mp4' }).click()
+await folder.getByRole('img', { name: 'Video sample.mp4' }).first().click()
 await folder.locator('video').waitFor({ timeout: 10000 })
 if (shots) await folder.screenshot({ path: join(shots, 'sicpic-video-player.png') })
 const folderViolations = await folder.evaluate(() => window.__violations)
 if (folderViolations.length > 0) {
   console.error('csp violations during upload', folderViolations)
+  process.exit(1)
+}
+
+const admin = await browser.newContext()
+await admin.addCookies([
+  { name: 'sicpic-e2e', value: token, url: base },
+  { name: 'sicpic-e2e-role', value: 'admin', url: base },
+])
+const membersPage = await admin.newPage()
+await membersPage.goto(base + '/verwaltung/mitglieder', { waitUntil: 'load' })
+if ((await membersPage.locator('h1').innerText()) !== 'Mitglieder') {
+  console.error('members page did not open', await membersPage.locator('h1').innerText())
+  process.exit(1)
+}
+await membersPage.getByRole('button', { name: 'Einladungslink erstellen' }).click()
+const inviteLink = await membersPage.getByRole('textbox', { name: 'Einladungslink' }).inputValue()
+if (!inviteLink.includes('/einladung/')) {
+  console.error('invite link missing', inviteLink)
+  process.exit(1)
+}
+const guest = await browser.newContext()
+const invited = await guest.newPage()
+await invited.goto(inviteLink, { waitUntil: 'load' })
+if ((await invited.locator('h1').innerText()) !== 'Du wurdest zu Sicpic eingeladen') {
+  console.error('invite page missing', await invited.locator('h1').innerText())
+  process.exit(1)
+}
+await invited.getByRole('button', { name: 'Mit Google anmelden' }).click()
+await invited.waitForURL('**/gruppe', { timeout: 15000 })
+if ((await invited.locator('h1').innerText()) !== 'Gruppe') {
+  console.error('redeem did not open the group', await invited.locator('h1').innerText())
+  process.exit(1)
+}
+await invited.goto(inviteLink, { waitUntil: 'load' })
+if ((await invited.locator('h1').innerText()) !== 'Einladung ungültig') {
+  console.error('used invite still open', await invited.locator('h1').innerText())
   process.exit(1)
 }
 

@@ -96,6 +96,11 @@ export const memberRoleSchema = z.object({
   role: z.enum(['admin', 'member']),
 })
 
+export const inviteCreateSchema = z.object({
+  displayName: z.string().trim().max(80).optional(),
+  role: z.enum(['admin', 'member']).optional(),
+})
+
 const ZOD_DEFAULT = /^(Invalid input|Invalid option|Too (big|small)|Expected )|^Unrecognized key/
 
 export function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
