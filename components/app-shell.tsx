@@ -19,7 +19,7 @@ export function AppShell({ member, children }: { member: Member; children: React
   const router = useRouter();
 
   useEffect(() => {
-    for (const href of ["/ordner", "/gruppe", "/feedback"]) router.prefetch(href);
+    for (const href of ["/ordner", "/gruppe", "/feedback", "/profil"]) router.prefetch(href);
     for (const scope of ["group", "mine"] as const) prefetchGallery(scope);
   }, [router]);
 
@@ -38,6 +38,13 @@ export function AppShell({ member, children }: { member: Member; children: React
             <p className="text-xs text-muted">{member.displayName}</p>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href="/profil"
+              transitionTypes={["tab"]}
+              className={`rounded-full px-3 py-2 text-sm font-medium ${pathname.startsWith("/profil") ? "bg-accent text-accent-ink" : "text-accent"}`}
+            >
+              Profil
+            </Link>
             {member.role === "admin" ? (
               <Link href="/verwaltung/rueckmeldungen" transitionTypes={["tab"]} className="rounded-full px-3 py-2 text-sm font-medium text-accent">
                 Verwaltung

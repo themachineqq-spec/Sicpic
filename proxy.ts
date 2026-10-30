@@ -6,7 +6,7 @@ import { e2eMemberFromCookies, isE2EAuthEnabled, isLoopbackHost } from '@/lib/e2
 // Netlify runs this proxy as an edge function. Keep the AWS SDK out of this
 // file. Presigned R2 URLs are issued only from Node route handlers.
 
-const PROTECTED = ['/ordner', '/gruppe', '/feedback', '/verwaltung']
+const PROTECTED = ['/ordner', '/gruppe', '/feedback', '/verwaltung', '/profil']
 
 function applyContentSecurityPolicy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')

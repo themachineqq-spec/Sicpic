@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type { User } from '@supabase/supabase-js'
+import { displayNameFromGoogle } from '@/lib/display-name'
 import { AppError } from '@/lib/errors'
 import { isE2ERequest } from '@/lib/e2e-guard'
 import {
@@ -154,8 +155,7 @@ export async function redeemInviteToken(token: string, user: User): Promise<Memb
   const email = user.email?.trim().toLowerCase()
   if (!email) return null
   const metadata = user.user_metadata ?? {}
-  const raw = metadata.full_name ?? metadata.name
-  const displayName = (typeof raw === 'string' ? raw.trim() : '') || email.split('@')[0] || email
+  const displayName = displayNameFromGoogle(metadata.full_name ?? metadata.name, email)
   if (await isE2ERequest()) {
     return redeemE2EInvite(token, { id: user.id, email, displayName })
   }
