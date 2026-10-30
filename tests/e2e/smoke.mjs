@@ -152,5 +152,22 @@ if ((await invited.locator('h1').innerText()) !== 'Einladung ungültig') {
   process.exit(1)
 }
 
+await folder.getByRole('button', { name: 'Schließen' }).click()
+await folder.getByRole('link', { name: 'Gruppe' }).click()
+await folder.getByRole('heading', { name: 'Gruppe' }).waitFor({ timeout: 15000 })
+await folder.getByRole('button', { name: 'Fotos', exact: true }).click()
+await folder.waitForURL(/type=photo/, { timeout: 10000 })
+if ((await folder.getByRole('button', { name: 'Fotos', exact: true }).getAttribute('aria-pressed')) !== 'true') {
+  console.error('photo filter did not stick')
+  process.exit(1)
+}
+await folder.getByRole('link', { name: 'Ordner' }).click()
+await folder.getByRole('heading', { name: 'Mein Ordner' }).waitFor({ timeout: 15000 })
+const tabViolations = await folder.evaluate(() => window.__violations)
+if (tabViolations.length > 0) {
+  console.error('csp violations during tab switch', tabViolations)
+  process.exit(1)
+}
+
 await browser.close()
 console.log('e2e ok')

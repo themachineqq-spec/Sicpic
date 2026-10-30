@@ -5,6 +5,8 @@ export function json(data: unknown, status = 200): Response {
     status,
     headers: {
       'Cache-Control': 'private, no-store',
+      'CDN-Cache-Control': 'no-store',
+      Vary: 'Cookie',
     },
   })
 }

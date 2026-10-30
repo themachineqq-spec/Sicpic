@@ -126,4 +126,23 @@ describe('PhotoGallery', () => {
     await userEvent.click(screen.getByRole('button', { name: 'strand.jpg löschen' }))
     expect(await screen.findByText('Löschen fehlgeschlagen.')).toBeTruthy()
   })
+
+  it('filters photos and videos in the loaded list without waiting for the server', async () => {
+    api.mockResolvedValue({ months: [] })
+    const video = {
+      ...photoB,
+      mediaType: 'video' as const,
+      filename: 'clip.mp4',
+      thumbUrl: '/clip.jpg',
+    }
+    const { PhotoGallery } = await import('@/components/photo-gallery')
+    render(
+      <PhotoGallery scope="group" title="Gruppe" intro="Filter" initial={[photoA, video]} initialCursor={null} canDelete={false} />,
+    )
+    expect(screen.getByRole('img', { name: 'Ada: strand.jpg' })).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Videos' }))
+    expect(screen.queryByRole('img', { name: 'Ada: strand.jpg' })).toBeNull()
+    expect(screen.getByRole('img', { name: 'Video clip.mp4' })).toBeTruthy()
+    expect(routerMocks.replace).toHaveBeenCalledWith(expect.stringContaining('type=video'), { scroll: false })
+  })
 })

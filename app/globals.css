@@ -40,6 +40,54 @@ textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
+@supports not (view-transition-name: root) {
+  @media (prefers-reduced-motion: no-preference) {
+    .tab-panel {
+      animation: sicpic-tab-in 180ms ease;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(.tab-fade) {
+    animation: sicpic-tab-out 180ms ease both;
+  }
+
+  ::view-transition-new(.tab-fade) {
+    animation: sicpic-tab-in 180ms ease both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel,
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation: none;
+  }
+}
+
+@keyframes sicpic-tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sicpic-tab-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
 ::selection {
   background: #fdba74;
 }
