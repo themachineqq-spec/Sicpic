@@ -40,16 +40,16 @@ npm run lint
 npm run typecheck
 ```
 
-Die App wird nicht von diesem Repository aus deployed. Deployment macht Vercel, sobald das Projekt dort verbunden ist.
+Die App wird nicht von diesem Repository aus deployed. Deployment macht Netlify, sobald die Site dort verbunden ist.
 
 ## Einrichtung für den Betrieb
 
 Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
 
 1. Supabase-Projekt
-2. Google-Cloud-OAuth-Client (die Client-Daten kommen in Supabase, nicht in Vercel)
+2. Google-Cloud-OAuth-Client (die Client-Daten kommen in Supabase, nicht in Netlify)
 3. Cloudflare-R2-Bucket und API-Token
-4. Vercel-Projekt mit den Umgebungsvariablen
+4. Netlify-Site mit den Umgebungsvariablen
 5. Die Google-Adresse in `INITIAL_ADMIN_EMAIL` (kein extra Konto)
 
 ### 1. Supabase-Projekt
@@ -62,10 +62,12 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
 3. Unter **SQL Editor** den Inhalt von `supabase/migrations/20261028120000_init.sql` ausführen. Die Datei legt Tabellen, RLS-Policies und Hilfsfunktionen an.
 4. Unter **Authentication → Providers** E-Mail/Passwort und alle anderen Provider auslassen. Nur **Google** aktivieren.
 5. Unter **Authentication → URL Configuration**:
-   - Site URL: `https://<dein-vercel-projekt>.vercel.app` (lokal zusätzlich `http://localhost:3000` testen, indem du die Site URL zeitweise umstellst oder beide Redirect-URLs einträgst)
+   - Site URL: `https://<site>.netlify.app`
    - Redirect URLs:
      - `http://localhost:3000/auth/callback`
-     - `https://<dein-vercel-projekt>.vercel.app/auth/callback`
+     - `https://<site>.netlify.app/auth/callback`
+
+   Der Callback-Pfad der App ist `/auth/callback`. `NEXT_PUBLIC_APP_URL` muss dieselbe Origin sein, ohne Slash am Ende, weil die Anmeldung dorthin zurückleitet.
 
 ### 2. Google-Anmeldung
 
@@ -92,7 +94,7 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
 ```json
 [
   {
-    "AllowedOrigins": ["http://localhost:3000", "https://dein-projekt.vercel.app"],
+    "AllowedOrigins": ["http://localhost:3000", "https://<site>.netlify.app"],
     "AllowedMethods": ["GET", "PUT", "HEAD"],
     "AllowedHeaders": ["*"],
     "ExposeHeaders": ["ETag"],
@@ -103,13 +105,13 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
 
 `<img>`-Vorschauen brauchen dafür kein CORS. Der PUT aus dem Browser schon.
 
-### 4. Vercel
+### 4. Netlify
 
-1. Das GitHub-Repository mit einem neuen Vercel-Projekt verbinden. Framework: Next.js. Nichts weiter einstellen.
-2. Unter **Settings → Environment Variables** alle Variablen aus `.env.example` eintragen, für Production und Preview. `NEXT_PUBLIC_*` muss beim Build gesetzt sein.
-3. `NEXT_PUBLIC_APP_URL` ist die echte HTTPS-Adresse, ohne Slash am Ende.
+1. Auf [netlify.com](https://www.netlify.com) im Free-Tarif eine Site aus diesem GitHub-Repository anlegen. Framework: Next.js. Die Datei `netlify.toml` setzt Build-Befehl `npm run build`, Publish-Verzeichnis `.next` und Node 22 (erfüllt Node 20+). Netlify erkennt den OpenNext-Adapter von selbst. `@netlify/plugin-nextjs` nicht zusätzlich eintragen, sonst bleiben Adapter-Updates aus.
+2. Unter **Site configuration → Environment variables** alle Variablen aus `.env.example` eintragen. `NEXT_PUBLIC_*` muss beim Build gesetzt sein, weil Next sie einbettet. Dieselben Werte für Production und Deploy Previews verwenden, oder `NEXT_PUBLIC_APP_URL` pro Kontext auf die jeweilige HTTPS-Adresse setzen.
+3. `NEXT_PUBLIC_APP_URL` ist die öffentliche Adresse ohne Slash am Ende, zum Beispiel `https://<site>.netlify.app`. Absolute URLs kommen nur daher, nicht aus einer Host-Variable der Plattform. Die signierten R2-Routen und `/auth/callback` laufen als Node-Serverless-Function, nicht in der Edge-Runtime. Der AWS-SDK braucht Node.
 4. `INITIAL_ADMIN_EMAIL` ist die Google-Adresse der ersten Admin-Person, klein geschrieben.
-5. Deploy auslösen. Dieses Repository deployed selbst nichts.
+5. Deploy auslösen. Dieses Repository deployed selbst nichts. In den Build-Logs sollte der OpenNext-Adapter erscheinen, ohne dass ein Plugin in `netlify.toml` steht.
 
 ### 5. Erste Person und weitere Mitglieder
 
@@ -121,7 +123,7 @@ Fotos löschen kann nur, wer sie hochgeladen hat, und nur im eigenen Ordner. Ein
 
 ### 6. Auf den Home-Bildschirm
 
-Die App muss über HTTPS laufen (Vercel). Lokal ist das Installieren unzuverlässig.
+Die App muss über HTTPS laufen (Netlify). Lokal ist das Installieren unzuverlässig.
 
 **iPhone**
 
@@ -142,7 +144,7 @@ Der Service Worker speichert nur das App-Gerüst und die Icons, keine Fotos und 
 - HEIC wird auf dem Handy umgewandelt. Das kann bei großen Dateien einen Moment dauern. Schlägt die Umwandlung fehl, bleibt der Rest der Auswahl unberührt.
 - Signierte URLs leben standardmäßig fünf Minuten (`PRESIGN_EXPIRES_SECONDS`, erlaubt 60 bis 600). Eine abgelaufene Vorschau wird beim Fehler neu angefordert.
 - Die Gruppenansicht ist neueste Aufnahme zuerst. Innerhalb eines Tages ebenfalls. Gleiche Zeitpunkte werden stabil über die ID sortiert.
-- Kostenrahmen der genannten Tarife: Supabase Free, Cloudflare R2 Free-Kontingent, Vercel Hobby. R2-Speicher über dem Freikontingent berechnet Cloudflare.
+- Kostenrahmen der genannten Tarife: Supabase Free, Cloudflare R2 Free-Kontingent, Netlify Free. R2-Speicher über dem Freikontingent berechnet Cloudflare.
 
 ## Skripte
 

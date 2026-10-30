@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { linkOrBootstrapMember } from '@/lib/auth'
+import { appOrigin } from '@/lib/config'
 import { createClient } from '@/lib/supabase/server'
 
 function safeNext(value: string | null): string {
@@ -9,9 +10,10 @@ function safeNext(value: string | null): string {
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
+  const origin = appOrigin(request)
   const code = url.searchParams.get('code')
   const next = safeNext(url.searchParams.get('next'))
-  const failure = new URL('/', url.origin)
+  const failure = new URL('/', origin)
   failure.searchParams.set('fehler', 'anmeldung')
 
   if (!code) return NextResponse.redirect(failure)
@@ -29,7 +31,7 @@ export async function GET(request: Request) {
     const member = await linkOrBootstrapMember(user)
     if (!member) {
       await supabase.auth.signOut()
-      return NextResponse.redirect(new URL('/nicht-eingeladen', url.origin))
+      return NextResponse.redirect(new URL('/nicht-eingeladen', origin))
     }
   } catch (caught) {
     console.error(caught)
@@ -37,5 +39,5 @@ export async function GET(request: Request) {
     return NextResponse.redirect(failure)
   }
 
-  return NextResponse.redirect(new URL(next, url.origin))
+  return NextResponse.redirect(new URL(next, origin))
 }

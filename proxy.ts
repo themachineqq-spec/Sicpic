@@ -1,6 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Netlify runs this proxy as an edge function. Keep the AWS SDK out of this
+// file. Presigned R2 URLs are issued only from Node route handlers.
+
 const PROTECTED = ['/ordner', '/gruppe', '/feedback', '/verwaltung']
 
 export async function proxy(request: NextRequest) {

@@ -22,7 +22,8 @@ export function LoginScreen({
     setPending(true);
     setError(null);
     const next = new URLSearchParams(window.location.search).get("next");
-    const redirectTo = new URL("/auth/callback", window.location.origin);
+    const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+    const redirectTo = new URL("/auth/callback", configured || window.location.origin);
     if (next && next.startsWith("/") && !next.startsWith("//")) {
       redirectTo.searchParams.set("next", next);
     }
