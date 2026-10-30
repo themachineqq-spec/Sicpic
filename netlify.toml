@@ -1,0 +1,15 @@
+# Next.js 16 on Netlify. The OpenNext adapter is applied automatically
+# during the build. Do not pin @netlify/plugin-nextjs: that opts out of
+# adapter updates.
+#
+# Route handlers, including R2 presign endpoints and /auth/callback, are
+# deployed as a Node.js serverless function. They must not set
+# `runtime = "edge"` — the AWS SDK needs Node. Next.js middleware
+# (`proxy.ts`) does not import that SDK and stays on Netlify's edge
+# function.
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
