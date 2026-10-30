@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AdminMembers } from "@/components/admin-members";
 import { requirePageMember } from "@/lib/auth";
-import { listMembers } from "@/lib/member-admin";
+import { listMembersForPage, listOpenInvites } from "@/lib/invite-service";
 
 export const metadata: Metadata = { title: "Mitglieder" };
 
@@ -18,6 +18,6 @@ export default function MembersPage() {
 async function MembersLoader() {
   const member = await requirePageMember();
   if (member.role !== "admin") redirect("/gruppe");
-  const members = await listMembers();
-  return <AdminMembers members={members} selfId={member.id} />;
+  const [members, invites] = await Promise.all([listMembersForPage(), listOpenInvites()]);
+  return <AdminMembers members={members} invites={invites} selfId={member.id} />;
 }

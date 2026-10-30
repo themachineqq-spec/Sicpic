@@ -36,7 +36,7 @@ describe('AdminMembers', () => {
     api.mockResolvedValue({ ok: true })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { AdminMembers } = await import('@/components/admin-members')
-    render(<AdminMembers members={[self, other]} selfId={self.id} />)
+    render(<AdminMembers members={[self, other]} invites={[]} selfId={self.id} />)
     expect(screen.getByText('Das bist du')).toBeTruthy()
     await userEvent.type(screen.getByRole('textbox', { name: 'E-Mail' }), 'cara@example.com')
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Rolle' }), 'admin')
@@ -52,9 +52,40 @@ describe('AdminMembers', () => {
   it('shows the German error when the invite is rejected', async () => {
     api.mockRejectedValue(new Error('Diese Adresse steht schon auf der Liste.'))
     const { AdminMembers } = await import('@/components/admin-members')
-    render(<AdminMembers members={[self]} selfId={self.id} />)
+    render(<AdminMembers members={[self]} invites={[]} selfId={self.id} />)
     await userEvent.type(screen.getByRole('textbox', { name: 'E-Mail' }), 'ada@example.com')
     await userEvent.click(screen.getByRole('button', { name: 'Zur Liste hinzufügen' }))
     expect(await screen.findByText('Diese Adresse steht schon auf der Liste.')).toBeTruthy()
+  })
+
+  it('creates a link, copies it when sharing is unavailable, and revokes an open invite', async () => {
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
+    api.mockResolvedValueOnce({ invite: { url: 'https://sicpic.example/einladung/token' } })
+    api.mockResolvedValueOnce({ ok: true })
+    const { AdminMembers } = await import('@/components/admin-members')
+    render(
+      <AdminMembers
+        members={[self]}
+        invites={[
+          {
+            id: '66666666-6666-4666-8666-666666666666',
+            displayName: null,
+            role: 'member',
+            createdAt: '2026-10-30T00:00:00.000Z',
+            expiresAt: '2026-11-06T00:00:00.000Z',
+          },
+        ]}
+        selfId={self.id}
+      />,
+    )
+    expect(screen.getByText('Ohne Namen')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Einladungslink erstellen' }))
+    expect(api).toHaveBeenCalledWith('/api/invites', expect.objectContaining({ method: 'POST' }))
+    expect(writeText).toHaveBeenCalledWith('https://sicpic.example/einladung/token')
+    expect(await screen.findByText('Link kopiert.')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Zurückziehen' }))
+    expect(api).toHaveBeenCalledWith('/api/invites/66666666-6666-4666-8666-666666666666', expect.objectContaining({ method: 'DELETE' }))
   })
 })

@@ -212,4 +212,31 @@ describe('e2e photo store', () => {
     expect(readE2EMedia(started.photoId, 'original')).toBeNull()
     expect(() => abortE2EVideo(started.photoId, started.uploadId)).toThrow(/Nicht gefunden/)
   })
+
+  it('redeems a local invite once and ignores it when e2e auth is off', async () => {
+    const { createE2EInvite, listE2EInvites, listE2EMembers, peekE2EInvite, redeemE2EInvite, revokeE2EInvite } = await import(
+      '@/lib/e2e-store'
+    )
+    expect(listE2EInvites()).toEqual([])
+    expect(peekE2EInvite('nope')).toBe(false)
+    expect(redeemE2EInvite('nope', { id: member.id, email: 'a@example.com', displayName: 'A' })).toBeNull()
+    expect(() => createE2EInvite({ createdBy: member.id })).toThrow(/Nicht gefunden/)
+    process.env.SICPIC_E2E_AUTH = '1'
+    process.env.SICPIC_E2E_LOCAL = '1'
+    const created = createE2EInvite({ createdBy: member.id, displayName: 'Cara', role: 'admin' })
+    expect(peekE2EInvite(created.token)).toBe(true)
+    expect(listE2EInvites().map((invite) => invite.displayName)).toEqual(['Cara'])
+    const joined = redeemE2EInvite(created.token, {
+      id: '55555555-5555-4555-8555-555555555555',
+      email: 'cara@example.com',
+      displayName: 'Other',
+    })
+    expect(joined).toMatchObject({ email: 'cara@example.com', displayName: 'Cara', role: 'admin' })
+    expect(redeemE2EInvite(created.token, { id: member.id, email: 'else@example.com', displayName: 'Else' })).toBeNull()
+    expect(listE2EMembers().some((person) => person.email === 'cara@example.com')).toBe(true)
+    const second = createE2EInvite({ createdBy: member.id })
+    expect(revokeE2EInvite(second.id)).toBe(true)
+    expect(peekE2EInvite(second.token)).toBe(false)
+    expect(revokeE2EInvite(second.id)).toBe(false)
+  })
 })

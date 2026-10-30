@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from 'pg'
@@ -296,6 +297,101 @@ describe('postgres RLS migration', () => {
       expect(second.rows[0]?.id ?? null).toBeNull()
       expect(same.rows[0]?.id).toBe(first.rows[0]?.id)
       expect(admins.rows[0]?.count).toBe(1)
+    } finally {
+      await client.end()
+    }
+  })
+
+  it('lets only admins manage invites and redeems a token once', async () => {
+    const hash = (value: string) => createHash('sha256').update(value).digest('hex')
+    const openHash = hash('once-token')
+    const expiredHash = hash('expired-token')
+    const revokedHash = hash('revoked-token')
+    const guest = '55555555-5555-4555-8555-555555555555'
+    const client = await admin()
+    try {
+      await client.query('begin')
+      await client.query(`insert into auth.users (id) values ($1)`, [guest])
+      await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [userA])
+      await client.query(`select set_config('request.jwt.claim.role', 'authenticated', true)`)
+      await client.query('set local role authenticated')
+      const inserted = await client.query(
+        `insert into public.invites (token_hash, display_name, role, created_by, expires_at)
+         values ($1, 'Cara', 'member', $2, now() + interval '7 days') returning id`,
+        [openHash, adminA],
+      )
+      await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [userB])
+      const hidden = await client.query('select id from public.invites')
+      const denied = await captureError(
+        client,
+        `insert into public.invites (token_hash, role, created_by, expires_at)
+         values ($1, 'member', $2, now() + interval '7 days')`,
+        [hash('member-token'), adminB],
+      )
+      await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [userA])
+      const visible = await client.query('select id from public.invites')
+      const blockedCall = await captureError(
+        client,
+        `select public.redeem_invite($1, $2, 'cara@example.com', 'Cara')`,
+        [openHash, guest],
+      )
+
+      await client.query(`select set_config('request.jwt.claim.role', 'service_role', true)`)
+      await client.query('set local role service_role')
+      const redeemed = await client.query(
+        `select email, display_name, role from public.redeem_invite($1, $2, 'cara@example.com', 'Google Name')`,
+        [openHash, guest],
+      )
+      const second = await client.query(
+        `select id::text from public.redeem_invite($1, $2, 'cara2@example.com', 'Cara')`,
+        [openHash, guest],
+      )
+      await client.query(
+        `insert into public.invites (token_hash, role, created_by, created_at, expires_at)
+         values ($1, 'member', $2, now() - interval '2 days', now() - interval '1 minute')`,
+        [expiredHash, adminA],
+      )
+      await client.query(
+        `insert into public.invites (token_hash, role, created_by, expires_at, revoked_at)
+         values ($1, 'member', $2, now() + interval '7 days', now())`,
+        [revokedHash, adminA],
+      )
+      const expired = await client.query(
+        `select id::text from public.redeem_invite($1, $2, 'dora@example.com', 'Dora')`,
+        [expiredHash, guest],
+      )
+      const revoked = await client.query(
+        `select id::text from public.redeem_invite($1, $2, 'dora@example.com', 'Dora')`,
+        [revokedHash, guest],
+      )
+      const freshHash = hash('fresh-token')
+      await client.query(
+        `insert into public.invites (token_hash, role, created_by, expires_at)
+         values ($1, 'member', $2, now() + interval '7 days')`,
+        [freshHash, adminA],
+      )
+      const duplicateEmail = await client.query(
+        `select id::text from public.redeem_invite($1, $2, 'cara@example.com', 'Cara')`,
+        [freshHash, guest],
+      )
+      const freshStillOpen = await client.query(
+        `select used_at is null as open from public.invites where token_hash = $1`,
+        [freshHash],
+      )
+      const used = await client.query(`select used_at is not null as used from public.invites where token_hash = $1`, [openHash])
+      await client.query('rollback')
+      expect(inserted.rows).toHaveLength(1)
+      expect(hidden.rows).toHaveLength(0)
+      expect(denied).toMatch(/row-level security|permission denied/)
+      expect(visible.rows).toHaveLength(1)
+      expect(blockedCall).toMatch(/permission denied/)
+      expect(redeemed.rows[0]).toMatchObject({ email: 'cara@example.com', display_name: 'Cara', role: 'member' })
+      expect(second.rows[0]?.id ?? null).toBeNull()
+      expect(expired.rows[0]?.id ?? null).toBeNull()
+      expect(revoked.rows[0]?.id ?? null).toBeNull()
+      expect(duplicateEmail.rows[0]?.id ?? null).toBeNull()
+      expect(freshStillOpen.rows[0]?.open).toBe(true)
+      expect(used.rows[0]?.used).toBe(true)
     } finally {
       await client.end()
     }

@@ -9,7 +9,8 @@ import { LIMITS, photoObjectKeys, sanitizeFilename, videoObjectKeys } from '@/li
 import { resolveOriginalType, resolveVideoType } from '@/lib/content-types'
 import { assertVideoHeader, decodeVideoHeader } from '@/lib/video/magic'
 import { assertCompleteParts, assertUploadId, planVideoParts } from '@/lib/video/multipart'
-import type { MediaFilter, MediaType, Member, PhotoRecord } from '@/lib/types'
+import { createInviteToken, hashInviteToken, inviteExpiresAt, inviteIsUsable } from '@/lib/invite-token'
+import type { MediaFilter, MediaType, Member, MemberRole, PhotoRecord } from '@/lib/types'
 
 type Slot = 'original' | 'display' | 'thumb'
 
@@ -38,10 +39,33 @@ type PendingUpload = {
   contentType: string
 }
 
+type StoredInvite = {
+  id: string
+  tokenHash: string
+  displayName: string | null
+  role: MemberRole
+  createdBy: string
+  createdAt: string
+  expiresAt: string
+  revokedAt: string | null
+  usedAt: string | null
+  usedBy: string | null
+}
+
+type StoredMember = {
+  id: string
+  userId: string
+  email: string
+  displayName: string
+  role: MemberRole
+}
+
 type StoreState = {
   blobs: Record<string, number>
   photos: StoredPhoto[]
   uploads?: Record<string, PendingUpload>
+  invites?: StoredInvite[]
+  members?: StoredMember[]
 }
 
 const storeSlot = process.env.VITEST_POOL_ID ?? 'app'
@@ -54,13 +78,15 @@ function blobFile(photoId: string, slot: string): string {
 }
 
 function emptyState(): StoreState {
-  return { blobs: {}, photos: [] }
+  return { blobs: {}, photos: [], invites: [], members: [] }
 }
 
 function loadState(): StoreState {
   try {
     const parsed = JSON.parse(readFileSync(storeFile, 'utf8')) as StoreState
     if (!parsed || typeof parsed.blobs !== 'object' || !Array.isArray(parsed.photos)) return emptyState()
+    if (!Array.isArray(parsed.invites)) parsed.invites = []
+    if (!Array.isArray(parsed.members)) parsed.members = []
     return parsed
   } catch {
     return emptyState()
@@ -309,6 +335,139 @@ export function readE2EMedia(photoId: string, slot: string): Buffer | null {
 
 export function e2ePhotoExists(photoId: string): boolean {
   return loadState().photos.some((photo) => photo.id === photoId)
+}
+
+function invitesOf(state: StoreState): StoredInvite[] {
+  if (!state.invites) state.invites = []
+  return state.invites
+}
+
+function membersOf(state: StoreState): StoredMember[] {
+  if (!state.members) state.members = []
+  return state.members
+}
+
+export type E2EOpenInvite = {
+  id: string
+  displayName: string | null
+  role: MemberRole
+  createdAt: string
+  expiresAt: string
+}
+
+export function createE2EInvite(input: { createdBy: string; displayName?: string | null; role?: MemberRole; now?: number }): {
+  id: string
+  token: string
+  expiresAt: string
+  role: MemberRole
+  displayName: string | null
+} {
+  if (!isE2EAuthEnabled()) throw new AppError(404, 'not_found', 'Nicht gefunden.')
+  const now = input.now ?? Date.now()
+  const { token, tokenHash } = createInviteToken()
+  const invite: StoredInvite = {
+    id: randomUUID(),
+    tokenHash,
+    displayName: input.displayName?.trim() || null,
+    role: input.role === 'admin' ? 'admin' : 'member',
+    createdBy: input.createdBy,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: inviteExpiresAt(now).toISOString(),
+    revokedAt: null,
+    usedAt: null,
+    usedBy: null,
+  }
+  const state = loadState()
+  invitesOf(state).push(invite)
+  saveState(state)
+  return {
+    id: invite.id,
+    token,
+    expiresAt: invite.expiresAt,
+    role: invite.role,
+    displayName: invite.displayName,
+  }
+}
+
+export function listE2EInvites(now = Date.now()): E2EOpenInvite[] {
+  if (!isE2EAuthEnabled()) return []
+  return invitesOf(loadState())
+    .filter((invite) => !invite.usedAt && !invite.revokedAt && new Date(invite.expiresAt).getTime() > now)
+    .map((invite) => ({
+      id: invite.id,
+      displayName: invite.displayName,
+      role: invite.role,
+      createdAt: invite.createdAt,
+      expiresAt: invite.expiresAt,
+    }))
+}
+
+export function revokeE2EInvite(id: string): boolean {
+  if (!isE2EAuthEnabled()) throw new AppError(404, 'not_found', 'Nicht gefunden.')
+  const state = loadState()
+  const invite = invitesOf(state).find((item) => item.id === id && !item.usedAt && !item.revokedAt)
+  if (!invite) return false
+  invite.revokedAt = new Date().toISOString()
+  saveState(state)
+  return true
+}
+
+export function peekE2EInvite(token: string, now = Date.now()): boolean {
+  if (!isE2EAuthEnabled()) return false
+  const tokenHash = hashInviteToken(token)
+  const invite = invitesOf(loadState()).find((item) => item.tokenHash === tokenHash) ?? null
+  return inviteIsUsable(token, invite, now)
+}
+
+export function listE2EMembers(): Member[] {
+  const state = loadState()
+  const extras = membersOf(state).map((member) => ({
+    id: member.id,
+    userId: member.userId,
+    email: member.email,
+    displayName: member.displayName,
+    role: member.role,
+  }))
+  const self: Member = {
+    id: E2E_MEMBER_ID,
+    userId: '22222222-2222-4222-8222-222222222222',
+    email: 'e2e@example.com',
+    displayName: 'E2E',
+    role: 'admin',
+  }
+  return [self, ...extras.filter((member) => member.id !== self.id)]
+}
+
+export function redeemE2EInvite(
+  token: string,
+  user: { id: string; email: string; displayName: string },
+  now = Date.now(),
+): Member | null {
+  if (!isE2EAuthEnabled()) return null
+  const state = loadState()
+  const tokenHash = hashInviteToken(token)
+  const invite = invitesOf(state).find((item) => item.tokenHash === tokenHash)
+  if (!invite || !inviteIsUsable(token, invite, now)) return null
+  const email = user.email.trim().toLowerCase()
+  if (!email.includes('@') || membersOf(state).some((member) => member.email === email) || email === 'e2e@example.com') return null
+  const member: StoredMember = {
+    id: randomUUID(),
+    userId: user.id,
+    email,
+    displayName: invite.displayName || user.displayName || user.email.split('@')[0] || user.email,
+    role: invite.role,
+  }
+  invite.usedAt = new Date(now).toISOString()
+  invite.usedBy = member.id
+  membersOf(state).push(member)
+  saveState(state)
+  return {
+    id: member.id,
+    userId: member.userId,
+    email: member.email,
+    displayName: member.displayName,
+    role: member.role,
+  }
 }
 
 export function e2ePhotoRecord(photoId: string): PhotoRecord | null {
