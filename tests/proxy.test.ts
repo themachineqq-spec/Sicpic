@@ -43,6 +43,12 @@ describe('proxy CSP nonce', () => {
 
   it('sends anonymous visitors away from member pages and leaves the login page alone', async () => {
     const { proxy } = await import('@/proxy')
+    const privacy = await proxy(new NextRequest('http://127.0.0.1:4173/datenschutz'))
+    const terms = await proxy(new NextRequest('http://127.0.0.1:4173/nutzungsbedingungen'))
+    expect(privacy.headers.get('location')).toBeNull()
+    expect(terms.headers.get('location')).toBeNull()
+    expect(privacy.headers.get('content-security-policy')).toContain("'strict-dynamic'")
+    expect(terms.headers.get('content-security-policy')).not.toContain('unsafe-eval')
     const blocked = await proxy(new NextRequest('http://127.0.0.1:4173/ordner'))
     expect(blocked.status).toBeGreaterThanOrEqual(300)
     expect(new URL(blocked.headers.get('location') ?? 'http://invalid').pathname).toBe('/')
