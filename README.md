@@ -96,8 +96,9 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
    - `supabase/migrations/20261028120000_init.sql`
    - `supabase/migrations/20261030140000_video_media.sql`
    - `supabase/migrations/20261030180000_perf_thumbs.sql`
+   - `supabase/migrations/20261030220000_fix_thumb_large_key.sql`
 
-   Die erste Datei legt Tabellen, RLS-Policies und Hilfsfunktionen an. Die zweite ergänzt Videos. Die dritte legt die kleinen WebP-Vorschaubilder, den Platzhalter und die Monatszählung an.
+   Die erste Datei legt Tabellen, RLS-Policies und Hilfsfunktionen an. Die zweite ergänzt Videos. Die dritte legt die kleinen WebP-Vorschaubilder, den Platzhalter und die Monatszählung an. Die vierte korrigiert die Prüfung der großen Vorschau (thumb-640), ohne die Videos nicht gespeichert werden können.
 4. Unter **Authentication → Providers** E-Mail/Passwort und alle anderen Provider auslassen. Nur **Google** aktivieren.
 5. Unter **Authentication → URL Configuration**:
    - Site URL: `https://<site>.netlify.app`
