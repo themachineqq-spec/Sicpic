@@ -3,11 +3,13 @@ export function putWithProgress(
   blob: Blob,
   contentType: string,
   onProgress: (ratio: number) => void,
+  headers?: Record<string, string>,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('PUT', url)
     xhr.setRequestHeader('Content-Type', contentType)
+    for (const [name, value] of Object.entries(headers ?? {})) xhr.setRequestHeader(name, value)
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) onProgress(event.loaded / event.total)
     }

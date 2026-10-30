@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { api } from "@/lib/api-client";
 import { putWithProgress } from "@/lib/browser-upload";
+import { THUMB_CACHE_CONTROL } from "@/lib/images/thumbs";
 import { isVideoFile } from "@/lib/content-types";
 import { preparePhotoFile } from "@/lib/images/prepare-photo";
 import { uploadPreparedVideo } from "@/lib/video/client-upload";
@@ -19,6 +20,7 @@ type UploadGrant = {
   original: { url: string; contentType: string };
   display: { url: string; contentType: string };
   thumb: { url: string; contentType: string };
+  thumbLarge?: { url: string; contentType: string };
 };
 
 export function Uploader({ onUploaded }: { onUploaded: () => void }) {
@@ -42,17 +44,27 @@ export function Uploader({ onUploaded }: { onUploaded: () => void }) {
     patch(index, { progress: 0.08, message: "Wird hochgeladen…" });
     const grant = await api<UploadGrant>("/api/photos/uploads", {
       method: "POST",
-      body: JSON.stringify({ filename: prepared.filename, contentType: prepared.originalContentType }),
+      body: JSON.stringify({
+        filename: prepared.filename,
+        contentType: prepared.originalContentType,
+        thumbContentType: prepared.thumbContentType,
+      }),
     });
+    const thumbHeaders = { "Cache-Control": THUMB_CACHE_CONTROL };
     await putWithProgress(grant.original.url, prepared.original, grant.original.contentType, (ratio) => {
-      patch(index, { progress: 0.08 + ratio * 0.62 });
+      patch(index, { progress: 0.08 + ratio * 0.5 });
     });
     await putWithProgress(grant.display.url, prepared.display, grant.display.contentType, (ratio) => {
-      patch(index, { progress: 0.7 + ratio * 0.15 });
+      patch(index, { progress: 0.58 + ratio * 0.16 });
     });
     await putWithProgress(grant.thumb.url, prepared.thumb, grant.thumb.contentType, (ratio) => {
-      patch(index, { progress: 0.85 + ratio * 0.1 });
-    });
+      patch(index, { progress: 0.74 + ratio * 0.1 });
+    }, thumbHeaders);
+    if (grant.thumbLarge && prepared.thumbLarge) {
+      await putWithProgress(grant.thumbLarge.url, prepared.thumbLarge, grant.thumbLarge.contentType, (ratio) => {
+        patch(index, { progress: 0.84 + ratio * 0.1 });
+      }, thumbHeaders);
+    }
     await api("/api/photos", {
       method: "POST",
       body: JSON.stringify({
@@ -62,6 +74,8 @@ export function Uploader({ onUploaded }: { onUploaded: () => void }) {
         width: prepared.width,
         height: prepared.height,
         capturedAt: prepared.capturedAt.toISOString(),
+        blurData: prepared.blurData,
+        thumbContentType: prepared.thumbContentType,
       }),
     });
     patch(index, { status: "done", progress: 1, message: "Gespeichert" });

@@ -49,7 +49,8 @@ describe('defaultPoster', () => {
     vi.stubGlobal('URL', { createObjectURL: () => 'blob:video', revokeObjectURL: () => undefined })
     const poster = await defaultPoster(new File([Buffer.from(ftyp())], 'a.mp4', { type: 'video/mp4' }))
     expect(poster?.width).toBe(800)
-    expect(poster?.blob.type).toBe('image/webp')
+    expect(poster?.small.type).toBe('image/webp')
+    expect(poster?.large.size).toBeGreaterThan(0)
     expect(poster?.durationMs).toBe(3000)
   })
 
@@ -91,7 +92,12 @@ describe('defaultPoster', () => {
     vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
       if (tag === 'video') return video as unknown as HTMLVideoElement
       if (tag === 'canvas') {
-        return { width: 0, height: 0, getContext: () => null, toBlob: () => undefined } as unknown as HTMLCanvasElement
+        return {
+          width: 0,
+          height: 0,
+          getContext: () => null,
+          toBlob: (callback: (blob: Blob | null) => void) => callback(null),
+        } as unknown as HTMLCanvasElement
       }
       return original(tag)
     })

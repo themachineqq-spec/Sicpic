@@ -61,23 +61,24 @@ export function createR2Signer(): ObjectSigner {
   const s3 = getR2Client()
   const Bucket = bucket()
   return {
-    async signPut({ key, contentType, expiresIn }) {
+    async signPut({ key, contentType, expiresIn, cacheControl }) {
       assertSafeObjectKey(key)
       const command = new PutObjectCommand({
         Bucket,
         Key: key,
         ContentType: contentType,
+        CacheControl: cacheControl,
       })
       return getSignedUrl(s3, command, { expiresIn })
     },
-    async signGet({ key, expiresIn, responseContentDisposition }) {
+    async signGet({ key, expiresIn, responseContentDisposition, signingDate }) {
       assertSafeObjectKey(key)
       const command = new GetObjectCommand({
         Bucket,
         Key: key,
         ResponseContentDisposition: responseContentDisposition,
       })
-      return getSignedUrl(s3, command, { expiresIn })
+      return getSignedUrl(s3, command, { expiresIn, signingDate })
     },
   }
 }

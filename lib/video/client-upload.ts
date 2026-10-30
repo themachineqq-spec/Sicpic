@@ -1,5 +1,6 @@
 import { api } from '@/lib/api-client'
 import { putPart, putWithProgress } from '@/lib/browser-upload'
+import { THUMB_CACHE_CONTROL } from '@/lib/images/thumbs'
 import { prepareVideoFile, type PreparedVideo } from '@/lib/video/prepare-video'
 import { uploadVideoParts } from '@/lib/video/multipart'
 
@@ -10,6 +11,7 @@ type InitGrant = {
   partCount: number
   contentType: string
   thumb: { url: string; contentType: string } | null
+  thumbLarge?: { url: string; contentType: string } | null
 }
 
 export async function uploadPreparedVideo(
@@ -49,8 +51,12 @@ async function sendVideo(
   init: InitGrant,
   onProgress: (ratio: number, message: string) => void,
 ) {
+  const thumbHeaders = { 'Cache-Control': THUMB_CACHE_CONTROL }
   if (prepared.thumb && init.thumb) {
-    await putWithProgress(init.thumb.url, prepared.thumb, init.thumb.contentType, () => undefined)
+    await putWithProgress(init.thumb.url, prepared.thumb, init.thumb.contentType, () => undefined, thumbHeaders)
+  }
+  if (prepared.thumbLarge && init.thumbLarge) {
+    await putWithProgress(init.thumbLarge.url, prepared.thumbLarge, init.thumbLarge.contentType, () => undefined, thumbHeaders)
   }
   const parts = await uploadVideoParts({
     byteSize: prepared.byteSize,

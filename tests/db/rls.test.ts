@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -75,10 +75,10 @@ describe('postgres RLS migration', () => {
       end $$
     `)
     await client.query('grant anon, authenticated, service_role to current_user')
-    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261028120000_init.sql'), 'utf8')
-    await client.query(sql)
-    const videoSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261030140000_video_media.sql'), 'utf8')
-    await client.query(videoSql)
+    const migrations = readdirSync(join(process.cwd(), 'supabase/migrations')).filter((name) => name.endsWith('.sql')).sort()
+    for (const name of migrations) {
+      await client.query(readFileSync(join(process.cwd(), 'supabase/migrations', name), 'utf8'))
+    }
     await client.query('grant usage on schema public to anon, authenticated, service_role')
     await client.query(`insert into auth.users (id) values ($1), ($2)`, [userA, userB])
     await client.query(

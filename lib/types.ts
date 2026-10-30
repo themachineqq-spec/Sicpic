@@ -41,6 +41,8 @@ export type GalleryPhoto = {
   createdAt: string
   uploaderName: string
   thumbUrl: string
+  thumbUrlLarge?: string | null
+  blurData?: string | null
   mediaType?: MediaType
   durationMs?: number | null
   codec?: string | null
@@ -63,6 +65,8 @@ export type PhotoRecord = {
   mediaType: MediaType
   durationMs: number | null
   codec: string | null
+  thumbLargeKey: string | null
+  blurData: string | null
 }
 
 export type SessionIdentity = {

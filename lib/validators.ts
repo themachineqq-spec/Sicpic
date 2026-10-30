@@ -7,6 +7,7 @@ const uuid = z.string().trim().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-
 export const uploadRequestSchema = z.object({
   filename: z.string().trim().min(1, 'Dateiname fehlt.').max(200),
   contentType: z.string().trim().max(120).optional(),
+  thumbContentType: z.enum(['image/webp', 'image/jpeg']).optional(),
 })
 
 export const completePhotoSchema = z.object({
@@ -16,6 +17,8 @@ export const completePhotoSchema = z.object({
   width: z.number().int().positive().max(20000).nullable(),
   height: z.number().int().positive().max(20000).nullable(),
   capturedAt: z.string().trim().min(4),
+  blurData: z.string().trim().min(32).max(2000).nullable().optional(),
+  thumbContentType: z.enum(['image/webp', 'image/jpeg']).optional(),
 })
 
 export const videoUploadSchema = z.object({

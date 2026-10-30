@@ -47,10 +47,25 @@ export function photoObjectKeys(memberId: string, photoId: string, extension: Or
     original: `${base}/original.${extension}`,
     display: `${base}/display.jpg`,
     thumb: `${base}/thumb.jpg`,
+    thumbLarge: `${base}/thumb-640.jpg`,
   }
   assertSafeObjectKey(keys.original)
   assertSafeObjectKey(keys.display)
   assertSafeObjectKey(keys.thumb)
+  assertSafeObjectKey(keys.thumbLarge)
+  return keys
+}
+
+export function photoThumbKeys(memberId: string, photoId: string, extension: 'jpg' | 'webp') {
+  const member = assertUuid(memberId, 'Mitglied')
+  const photo = assertUuid(photoId, 'Foto')
+  const base = `members/${member}/photos/${photo}`
+  const keys = {
+    thumb: `${base}/thumb-320.${extension}`,
+    thumbLarge: `${base}/thumb-640.${extension}`,
+  }
+  assertSafeObjectKey(keys.thumb)
+  assertSafeObjectKey(keys.thumbLarge)
   return keys
 }
 
@@ -62,10 +77,12 @@ export function videoObjectKeys(memberId: string, photoId: string, extension: Vi
     memberId: member,
     photoId: photo,
     original: `${base}/original.${extension}`,
-    thumb: `${base}/thumb.webp`,
+    thumb: `${base}/thumb-320.webp`,
+    thumbLarge: `${base}/thumb-640.webp`,
   }
   assertSafeObjectKey(keys.original)
   assertSafeObjectKey(keys.thumb)
+  assertSafeObjectKey(keys.thumbLarge)
   return keys
 }
 

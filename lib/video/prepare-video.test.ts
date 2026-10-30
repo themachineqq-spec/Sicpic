@@ -17,6 +17,7 @@ describe('prepareVideoFile', () => {
     expect(prepared.contentType).toBe('video/quicktime')
     expect(prepared.byteSize).toBe(bytes.byteLength)
     expect(prepared.thumb).toBeNull()
+    expect(prepared.thumbLarge).toBeNull()
     expect(prepared.capturedAt.toISOString()).toBe('2024-07-02T10:00:00.000Z')
     expect(prepared.header).toBe(Buffer.from(bytes).toString('base64'))
   })
@@ -25,7 +26,15 @@ describe('prepareVideoFile', () => {
     const bytes = ftyp('isom')
     const file = new File([Buffer.from(bytes)], 'clip.mp4', { type: '' })
     const thumb = new Blob(['webp'], { type: 'image/webp' })
-    const prepared = await prepareVideoFile(file, async () => ({ blob: thumb, width: 1280, height: 720, durationMs: 1500 }))
+    const prepared = await prepareVideoFile(file, async () => ({
+      small: thumb,
+      large: thumb,
+      blurData: 'data:image/jpeg;base64,YQ==',
+      contentType: 'image/webp',
+      width: 1280,
+      height: 720,
+      durationMs: 1500,
+    }))
     expect(prepared.thumb).toBe(thumb)
     expect(prepared.width).toBe(1280)
     expect(prepared.durationMs).toBe(1500)

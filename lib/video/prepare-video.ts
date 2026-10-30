@@ -1,4 +1,5 @@
 import { resolveVideoType } from '@/lib/content-types'
+import { renderThumbSet, type ThumbSet } from '@/lib/images/render-thumbs'
 import { sanitizeFilename } from '@/lib/keys'
 import { assertVideoHeader } from '@/lib/video/magic'
 import { mergeVideoMetadata, parseVideoMetadata, resolveVideoCapturedAt } from '@/lib/video/metadata'
@@ -15,6 +16,8 @@ export type PreparedVideo = {
   height: number | null
   codec: string | null
   thumb: Blob | null
+  thumbLarge: Blob | null
+  blurData: string | null
 }
 
 const HEAD_BYTES = 2 * 1024 * 1024
@@ -30,7 +33,7 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-export async function defaultPoster(file: File): Promise<{ blob: Blob; width: number; height: number; durationMs: number } | null> {
+export async function defaultPoster(file: File): Promise<(ThumbSet & { width: number; height: number; durationMs: number }) | null> {
   const url = URL.createObjectURL(file)
   const video = document.createElement('video')
   video.preload = 'auto'
@@ -53,18 +56,9 @@ export async function defaultPoster(file: File): Promise<{ blob: Blob; width: nu
     const width = video.videoWidth
     const height = video.videoHeight
     if (!width || !height) return null
-    const longest = Math.max(width, height)
-    const scale = longest > 480 ? 480 / longest : 1
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(width * scale))
-    canvas.height = Math.max(1, Math.round(height * scale))
-    const context = canvas.getContext('2d')
-    if (!context) return null
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.74))
-    if (!blob) return null
     const durationMs = Number.isFinite(video.duration) ? Math.max(0, Math.round(video.duration * 1000)) : 0
-    return { blob, width, height, durationMs }
+    const set = await renderThumbSet(video, width, height)
+    return { ...set, width, height, durationMs }
   } catch {
     return null
   } finally {
@@ -103,6 +97,8 @@ export async function prepareVideoFile(
     width: metadata.width ?? frame?.width ?? null,
     height: metadata.height ?? frame?.height ?? null,
     codec: metadata.codec,
-    thumb: frame?.blob ?? null,
+    thumb: frame?.small ?? null,
+    thumbLarge: frame?.large ?? null,
+    blurData: frame?.blurData ?? null,
   }
 }
