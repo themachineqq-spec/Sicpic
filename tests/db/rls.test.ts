@@ -417,4 +417,49 @@ describe('postgres RLS migration', () => {
     expect(filtered.dated).toEqual([photoB])
     expect(filtered.people).toEqual([adminA, adminB].sort())
   })
+
+  it('lets a member rename only themselves and uses the Google name when the invite has none', async () => {
+    const renamed = await withRole(userB, 'authenticated', async (client) => {
+      const own = await client.query(`update public.members set display_name = 'Beate' where id = $1 returning display_name`, [adminB])
+      const role = await captureError(client, `update public.members set role = 'admin' where id = $1`, [adminB])
+      const email = await captureError(client, `update public.members set email = 'other@example.com' where id = $1`, [adminB])
+      const other = await client.query(`update public.members set display_name = 'Fremd' where id = $1`, [adminA])
+      const current = await client.query(`select display_name from public.members where id = $1`, [adminA])
+      return {
+        own: own.rows[0]?.display_name,
+        role,
+        email,
+        other: other.rowCount,
+        current: current.rows[0]?.display_name,
+      }
+    })
+    expect(renamed.own).toBe('Beate')
+    expect(renamed.role).toMatch(/only_display_name/)
+    expect(renamed.email).toMatch(/only_display_name/)
+    expect(renamed.other).toBe(0)
+    expect(renamed.current).toBe('Ada')
+
+    const guest = '56565656-5656-4565-8565-565656565656'
+    const hash = createHash('sha256').update('google-name-invite').digest('hex')
+    const client = await admin()
+    try {
+      await client.query('begin')
+      await client.query(`insert into auth.users (id) values ($1)`, [guest])
+      await client.query(
+        `insert into public.invites (token_hash, display_name, role, created_by, expires_at)
+         values ($1, null, 'member', $2, now() + interval '7 days')`,
+        [hash, adminA],
+      )
+      await client.query(`select set_config('request.jwt.claim.role', 'service_role', true)`)
+      await client.query('set local role service_role')
+      const row = await client.query(
+        `select display_name from public.redeem_invite($1, $2, 'google@example.com', 'Google Name')`,
+        [hash, guest],
+      )
+      await client.query('rollback')
+      expect(row.rows[0]?.display_name).toBe('Google Name')
+    } finally {
+      await client.end()
+    }
+  })
 })

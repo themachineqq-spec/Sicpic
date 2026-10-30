@@ -163,6 +163,24 @@ if ((await folder.getByRole('button', { name: 'Fotos', exact: true }).getAttribu
 }
 await folder.getByRole('link', { name: 'Ordner' }).click()
 await folder.getByRole('heading', { name: 'Mein Ordner' }).waitFor({ timeout: 15000 })
+await folder.getByRole('link', { name: 'Profil' }).click()
+await folder.getByRole('heading', { name: 'Profil' }).waitFor({ timeout: 15000 })
+const email = await folder.getByRole('textbox', { name: 'E-Mail' }).inputValue()
+if (email !== 'e2e@example.com') {
+  console.error('profile email', email)
+  process.exit(1)
+}
+await folder.getByRole('textbox', { name: 'Anzeigename' }).fill('Reise')
+await folder.getByRole('button', { name: 'Speichern' }).click()
+await folder.getByText('Gespeichert.').waitFor({ timeout: 10000 })
+await folder.getByRole('link', { name: 'Gruppe' }).click()
+await folder.getByRole('heading', { name: 'Gruppe' }).waitFor({ timeout: 15000 })
+await folder.getByRole('combobox', { name: 'Person' }).waitFor({ timeout: 15000 })
+const person = await folder.getByRole('combobox', { name: 'Person' }).innerText()
+if (!person.includes('Reise')) {
+  console.error('renamed person missing', person)
+  process.exit(1)
+}
 const tabViolations = await folder.evaluate(() => window.__violations)
 if (tabViolations.length > 0) {
   console.error('csp violations during tab switch', tabViolations)

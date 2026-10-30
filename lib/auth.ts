@@ -7,6 +7,7 @@ import { AppError } from '@/lib/errors'
 import { mapMember } from '@/lib/member'
 import type { AccessDeps } from '@/lib/photo-access'
 import { e2eAccessOverride } from '@/lib/e2e-guard'
+import { readE2EDisplayName } from '@/lib/e2e-store'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import type { Member, MemberRow } from '@/lib/types'
@@ -44,6 +45,10 @@ const loadCachedRequestAccess = cache(loadRequestAccess)
 
 export async function getRequestAccess() {
   const override = await e2eAccessOverride()
+  if (override?.member) {
+    const name = readE2EDisplayName()
+    if (name) return { ...override, member: { ...override.member, displayName: name } }
+  }
   if (override) return override
   return loadCachedRequestAccess()
 }

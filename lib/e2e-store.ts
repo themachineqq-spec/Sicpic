@@ -66,6 +66,7 @@ type StoreState = {
   uploads?: Record<string, PendingUpload>
   invites?: StoredInvite[]
   members?: StoredMember[]
+  profileName?: string
 }
 
 const storeSlot = process.env.VITEST_POOL_ID ?? 'app'
@@ -188,7 +189,9 @@ export function listE2EPhotos(
   media: MediaFilter = 'all',
   filter: { ownerId?: string | null; from?: string | null; to?: string | null } = {},
 ) {
-  const filtered = loadState().photos
+  const state = loadState()
+  const profileName = state.profileName?.trim()
+  const filtered = state.photos
     .filter((photo) => (media === 'all' || (photo.mediaType ?? 'photo') === media) && (scope === 'group' || photo.ownerId === E2E_MEMBER_ID))
     .filter((photo) => !filter.ownerId || photo.ownerId === filter.ownerId)
     .filter((photo) => !filter.from || photo.capturedAt >= filter.from)
@@ -199,6 +202,7 @@ export function listE2EPhotos(
   return {
     photos: page.map((photo) => ({
       ...photo,
+      uploaderName: photo.ownerId === E2E_MEMBER_ID && profileName ? profileName : photo.uploaderName,
       mediaType: photo.mediaType ?? 'photo',
       durationMs: photo.durationMs ?? null,
       codec: photo.codec ?? null,
@@ -446,10 +450,29 @@ export function listE2EMembers(): Member[] {
     id: E2E_MEMBER_ID,
     userId: '22222222-2222-4222-8222-222222222222',
     email: 'e2e@example.com',
-    displayName: 'E2E',
+    displayName: state.profileName?.trim() || 'E2E',
     role: 'admin',
   }
   return [self, ...extras.filter((member) => member.id !== self.id)]
+}
+
+export function readE2EDisplayName(): string | null {
+  if (!isE2EAuthEnabled()) return null
+  const name = loadState().profileName?.trim()
+  return name ? name : null
+}
+
+export function setE2EDisplayName(name: string): void {
+  if (!isE2EAuthEnabled()) throw new AppError(404, 'not_found', 'Nicht gefunden.')
+  const state = loadState()
+  state.profileName = name
+  for (const photo of state.photos) {
+    if (photo.ownerId === E2E_MEMBER_ID) photo.uploaderName = name
+  }
+  for (const member of membersOf(state)) {
+    if (member.id === E2E_MEMBER_ID) member.displayName = name
+  }
+  saveState(state)
 }
 
 export function redeemE2EInvite(

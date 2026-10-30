@@ -13,7 +13,8 @@ Die Oberfläche ist Deutsch. Auf dem Handy lässt sich Sicpic als App auf den Ho
 - **Schneller Wechsel:** Ordner, Gruppe und Feedback werden vorgeladen. Die letzte Liste bleibt für den Tab in der Sitzung, damit der Wechsel sofort etwas zeigt und im Hintergrund neu lädt. Filter für Art, Person und Zeitraum stehen in der Adresse und gelten sofort auf den schon geladenen Bildern; die nächste Seite kommt mit demselben Filter vom Server. Listen-Antworten sind `private` und nicht für gemeinsame Caches.
 - **Große Sammlungen:** die Chronik lädt seitenweise (24, höchstens 48). Vorschaubilder sind WebP in 320 und 640 Pixeln, mit einem 16-Pixel-Platzhalter aus der Datenbank. Die Gruppe virtualisiert das Gitter, damit das Handy nicht zehntausende Knoten hält. Signierte Vorschau-URLs bleiben fünf Minuten gleich, die Datei selbst ist ein Jahr privat im Cache. Der Service Worker merkt sich Vorschaubilder am Objektpfad, ohne die Signatur. Wer noch alte JPEG-Vorschaubilder hat, erneuert sie im eigenen Ordner mit **Alte Vorschaubilder erneuern**. Eine Monatsleiste springt in der Chronik.
 - **Rückmeldung:** Fehler oder Wunsch, optional mit Screenshot. Admins filtern nach Art und Status und setzen den Status auf neu, in Arbeit oder erledigt.
-- **Mitglieder:** nur eingeladene E-Mail-Adressen können sich anmelden. Admins pflegen die Liste oder erstellen einen Einladungslink (sieben Tage, eine Person) und teilen ihn selbst. Die erste Admin-Person kommt aus `INITIAL_ADMIN_EMAIL`.
+- **Profil:** jede Person setzt den eigenen Anzeigenamen. Die Google-Adresse bleibt lesbar. Der Name erscheint in der Gruppe, im Ordner, bei den Mitgliedern und in den Rückmeldungen.
+- **Mitglieder:** nur eingeladene E-Mail-Adressen können sich anmelden. Admins pflegen die Liste oder erstellen einen Einladungslink (sieben Tage, eine Person) und teilen ihn selbst. Ohne vorgegebenen Namen übernimmt die Einladung den Google-Namen. Die erste Admin-Person kommt aus `INITIAL_ADMIN_EMAIL`.
 
 ## Sicherheit
 
@@ -100,6 +101,7 @@ Lege diese Konten und Schlüssel selbst an. Nichts davon gehört ins Git.
    - `supabase/migrations/20261030220000_fix_thumb_large_key.sql`
    - `supabase/migrations/20261030230000_invites.sql`
    - `supabase/migrations/20261030233000_gallery_filters.sql`
+   - `supabase/migrations/20261030240000_own_display_name.sql`
 
    Die erste Datei legt Tabellen, RLS-Policies und Hilfsfunktionen an. Die zweite ergänzt Videos. Die dritte legt die kleinen WebP-Vorschaubilder, den Platzhalter und die Monatszählung an. Die vierte korrigiert die Prüfung der großen Vorschau (thumb-640), ohne die Videos nicht gespeichert werden können. Die fünfte legt Einladungslinks an: nur der SHA-256-Hash des Tokens liegt in der Datenbank, der Link gilt sieben Tage und nur für eine Person. `20261030220000_fix_thumb_large_key.sql` ist auf dem bestehenden Projekt schon als `sicpic_fix_thumb_large_key` ausgeführt. Die Datei ersetzt dieselbe Prüfung und kann erneut laufen. Die Einladungsdatei und `20261030233000_gallery_filters.sql` (Person und Zeitraum in der Chronik) sind neu und müssen im SQL-Editor ausgeführt werden. Nicht aus dem Repository heraus auf das Live-Projekt anwenden.
 4. Unter **Authentication → Providers** E-Mail/Passwort und alle anderen Provider auslassen. Nur **Google** aktivieren.
