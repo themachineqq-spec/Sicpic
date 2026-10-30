@@ -49,6 +49,8 @@ describe('LoginScreen', () => {
     const { LoginScreen } = await import('@/components/login-screen')
     render(<LoginScreen configured={false} notice="Anmeldung fehlgeschlagen" />)
     expect(screen.getByRole('heading', { name: 'Urlaubs-Fotos an einem Ort' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Datenschutz' }).getAttribute('href')).toBe('/datenschutz')
+    expect(screen.getByRole('link', { name: 'Nutzungsbedingungen' }).getAttribute('href')).toBe('/nutzungsbedingungen')
     expect(screen.getByText('Anmeldung fehlgeschlagen')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Mit Google anmelden/ }).hasAttribute('disabled')).toBe(true)
   })

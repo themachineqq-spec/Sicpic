@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { LoginCarousel } from "@/components/login-carousel";
 
@@ -63,6 +64,15 @@ export function LoginScreen({
             <GoogleMark />
             {pending ? "Weiter zu Google…" : "Mit Google anmelden"}
           </button>
+          <p className="text-center text-xs text-white/70">
+            <Link href="/datenschutz" className="underline decoration-white/40 underline-offset-2">
+              Datenschutz
+            </Link>
+            <span aria-hidden="true"> · </span>
+            <Link href="/nutzungsbedingungen" className="underline decoration-white/40 underline-offset-2">
+              Nutzungsbedingungen
+            </Link>
+          </p>
         </div>
       </div>
     </main>
